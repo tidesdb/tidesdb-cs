@@ -144,63 +144,47 @@ jobs:
           cmake -G "MinGW Makefiles" \
             -DCMAKE_MAKE_PROGRAM=mingw32-make \
             -DCMAKE_PREFIX_PATH=/mingw64 \
-            -DBUILD_SHARED_LIBS=ON \
             -DTIDESDB_WITH_SANITIZER=OFF \
             -DTIDESDB_BUILD_TESTS=OFF \
             -S . -B build
           cmake --build build --config Release
           cmake --install build --prefix /mingw64
-          cp build/libtidesdb.dll /mingw64/bin/
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      - name: Restore dependencies (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          cd tidesdb-cs
-          dotnet restore
-
       - name: Build (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
           cd tidesdb-cs
-          dotnet build --no-restore
-
-      - name: Run tests (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          cd tidesdb-cs
-          dotnet test --no-build --verbosity normal
-
-      - name: Run tests (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          cd tidesdb-cs
-          export DYLD_LIBRARY_PATH=/usr/local/lib:$DYLD_LIBRARY_PATH
-          dotnet test --no-build --verbosity normal
-
-      - name: Restore dependencies (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          cd tidesdb-cs
-          dotnet restore
+          dotnet build --configuration Release
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           cd tidesdb-cs
-          dotnet build --no-restore
+          dotnet build --configuration Release
 
-      - name: Run tests (Windows)
+      - name: Test (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cd tidesdb-cs
+          dotnet test --configuration Release --no-build --verbosity normal
+
+      - name: Test (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cd tidesdb-cs
+          export DYLD_LIBRARY_PATH=/usr/local/lib:$DYLD_LIBRARY_PATH
+          dotnet test --configuration Release --no-build --verbosity normal
+
+      - name: Test (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          # Add MSYS2 MinGW bin to PATH so the DLLs can be found
-          $env:PATH = "$env:RUNNER_TEMP\msys64\mingw64\bin;$env:PATH"
+          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
           cd tidesdb-cs
-          dotnet test --verbosity normal
+          dotnet test --configuration Release --no-build --verbosity normal

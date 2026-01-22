@@ -5,18 +5,18 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
     
     <!-- Package metadata -->
     <PackageId>TidesDB</PackageId>
     <Version>0.2.0</Version>
     <Authors>TidesDB</Authors>
     <Company>TidesDB</Company>
-    <Description>TidesDB - A high-performance embedded key-value storage engine</Description>
-    <PackageTags>database;key-value;storage;embedded;lsm-tree;tidesdb</PackageTags>
+    <Description>Official C# bindings for TidesDB - A high-performance embedded key-value storage engine</Description>
     <PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/tidesdb/tidesdb-cs</PackageProjectUrl>
     <RepositoryUrl>https://github.com/tidesdb/tidesdb-cs</RepositoryUrl>
-    <RepositoryType>git</RepositoryType>
+    <PackageTags>tidesdb;database;key-value;lsm-tree;embedded;storage</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 

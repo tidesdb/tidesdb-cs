@@ -1,4 +1,3 @@
-// Package TidesDB
 // Copyright (C) TidesDB
 //
 // Original Author: Alex Gaetano Padula
@@ -7,7 +6,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	https://www.mozilla.org/en-US/MPL/2.0/
+//     https://www.mozilla.org/en-US/MPL/2.0/
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,18 +15,19 @@
 // limitations under the License.
 
 using System.Runtime.InteropServices;
+using TidesDB.Native;
 
 namespace TidesDB;
 
 /// <summary>
-/// Provides bidirectional iteration over key-value pairs in a column family.
+/// Iterator for traversing key-value pairs in a column family.
 /// </summary>
-public class Iterator : IDisposable
+public sealed class Iterator : IDisposable
 {
-    private IntPtr _handle;
+    private nint _handle;
     private bool _disposed;
 
-    internal Iterator(IntPtr handle)
+    internal Iterator(nint handle)
     {
         _handle = handle;
     }
@@ -38,8 +38,8 @@ public class Iterator : IDisposable
     public void SeekToFirst()
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_iter_seek_to_first(_handle);
-        TidesDBException.CheckResult(result, "failed to seek to first");
+        var result = NativeMethods.tidesdb_iter_seek_to_first(_handle);
+        TidesDBException.ThrowIfError(result, "failed to seek to first");
     }
 
     /// <summary>
@@ -48,76 +48,76 @@ public class Iterator : IDisposable
     public void SeekToLast()
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_iter_seek_to_last(_handle);
-        TidesDBException.CheckResult(result, "failed to seek to last");
+        var result = NativeMethods.tidesdb_iter_seek_to_last(_handle);
+        TidesDBException.ThrowIfError(result, "failed to seek to last");
     }
 
     /// <summary>
     /// Positions the iterator at the first key >= target key.
     /// </summary>
-    public void Seek(byte[] key)
+    public void Seek(ReadOnlySpan<byte> key)
     {
         ThrowIfDisposed();
+        int result;
         unsafe
         {
             fixed (byte* keyPtr = key)
             {
-                var result = Native.tidesdb_iter_seek(_handle, (IntPtr)keyPtr, (nuint)key.Length);
-                TidesDBException.CheckResult(result, "failed to seek");
+                result = NativeMethods.tidesdb_iter_seek(_handle, keyPtr, (nuint)key.Length);
             }
         }
+        TidesDBException.ThrowIfError(result, "failed to seek");
     }
 
     /// <summary>
     /// Positions the iterator at the last key <= target key.
     /// </summary>
-    public void SeekForPrev(byte[] key)
+    public void SeekForPrev(ReadOnlySpan<byte> key)
     {
         ThrowIfDisposed();
+        int result;
         unsafe
         {
             fixed (byte* keyPtr = key)
             {
-                var result = Native.tidesdb_iter_seek_for_prev(_handle, (IntPtr)keyPtr, (nuint)key.Length);
-                TidesDBException.CheckResult(result, "failed to seek for prev");
+                result = NativeMethods.tidesdb_iter_seek_for_prev(_handle, keyPtr, (nuint)key.Length);
             }
         }
+        TidesDBException.ThrowIfError(result, "failed to seek for prev");
     }
 
     /// <summary>
     /// Returns true if the iterator is positioned at a valid entry.
     /// </summary>
-    public bool IsValid()
+    public bool Valid()
     {
         ThrowIfDisposed();
-        return Native.tidesdb_iter_valid(_handle) != 0;
+        return NativeMethods.tidesdb_iter_valid(_handle) != 0;
     }
 
     /// <summary>
     /// Moves the iterator to the next entry.
-    /// Does not throw if already at end -- use IsValid() to check.
     /// </summary>
     public void Next()
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_iter_next(_handle);
-        if (result != Native.TDB_SUCCESS && result != Native.TDB_ERR_NOT_FOUND)
+        var result = NativeMethods.tidesdb_iter_next(_handle);
+        if (result != 0 && result != (int)ErrorCode.NotFound)
         {
-            throw new TidesDBException((ErrorCode)result, "failed to move to next");
+            TidesDBException.ThrowIfError(result, "failed to move to next");
         }
     }
 
     /// <summary>
     /// Moves the iterator to the previous entry.
-    /// Does not throw if already at beginning -- use IsValid() to check.
     /// </summary>
     public void Prev()
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_iter_prev(_handle);
-        if (result != Native.TDB_SUCCESS && result != Native.TDB_ERR_NOT_FOUND)
+        var result = NativeMethods.tidesdb_iter_prev(_handle);
+        if (result != 0 && result != (int)ErrorCode.NotFound)
         {
-            throw new TidesDBException((ErrorCode)result, "failed to move to prev");
+            TidesDBException.ThrowIfError(result, "failed to move to prev");
         }
     }
 
@@ -127,8 +127,8 @@ public class Iterator : IDisposable
     public byte[] Key()
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_iter_key(_handle, out var keyPtr, out var keySize);
-        TidesDBException.CheckResult(result, "failed to get key");
+        var result = NativeMethods.tidesdb_iter_key(_handle, out var keyPtr, out var keySize);
+        TidesDBException.ThrowIfError(result, "failed to get key");
 
         var key = new byte[(int)keySize];
         Marshal.Copy(keyPtr, key, 0, (int)keySize);
@@ -141,8 +141,8 @@ public class Iterator : IDisposable
     public byte[] Value()
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_iter_value(_handle, out var valuePtr, out var valueSize);
-        TidesDBException.CheckResult(result, "failed to get value");
+        var result = NativeMethods.tidesdb_iter_value(_handle, out var valuePtr, out var valueSize);
+        TidesDBException.ThrowIfError(result, "failed to get value");
 
         var value = new byte[(int)valueSize];
         Marshal.Copy(valuePtr, value, 0, (int)valueSize);
@@ -151,28 +151,18 @@ public class Iterator : IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(Iterator));
-        }
+        ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
-    /// <summary>
-    /// Releases the iterator resources.
-    /// </summary>
     public void Dispose()
     {
-        if (!_disposed && _handle != IntPtr.Zero)
-        {
-            Native.tidesdb_iter_free(_handle);
-            _handle = IntPtr.Zero;
-            _disposed = true;
-        }
-        GC.SuppressFinalize(this);
-    }
+        if (_disposed) return;
+        _disposed = true;
 
-    ~Iterator()
-    {
-        Dispose();
+        if (_handle != nint.Zero)
+        {
+            NativeMethods.tidesdb_iter_free(_handle);
+            _handle = nint.Zero;
+        }
     }
 }

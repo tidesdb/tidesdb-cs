@@ -1,4 +1,3 @@
-// Package TidesDB
 // Copyright (C) TidesDB
 //
 // Original Author: Alex Gaetano Padula
@@ -7,7 +6,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	https://www.mozilla.org/en-US/MPL/2.0/
+//     https://www.mozilla.org/en-US/MPL/2.0/
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,49 +17,35 @@
 namespace TidesDB;
 
 /// <summary>
-/// Exception thrown when a TidesDB operation fails.
+/// Exception thrown by TidesDB operations.
 /// </summary>
 public class TidesDBException : Exception
 {
     /// <summary>
-    /// Gets the error code returned by TidesDB.
+    /// The error code returned by the native library.
     /// </summary>
-    public ErrorCode Code { get; }
+    public ErrorCode ErrorCode { get; }
 
-    /// <summary>
-    /// Gets the context of the operation that failed.
-    /// </summary>
-    public string? Context { get; }
-
-    /// <summary>
-    /// Creates a new TidesDBException.
-    /// </summary>
-    public TidesDBException(ErrorCode code, string? context = null)
-        : base(FormatMessage(code, context))
+    public TidesDBException(ErrorCode errorCode, string? context = null)
+        : base(FormatMessage(errorCode, context))
     {
-        Code = code;
-        Context = context;
+        ErrorCode = errorCode;
     }
 
-    /// <summary>
-    /// Creates a new TidesDBException with an inner exception.
-    /// </summary>
-    public TidesDBException(ErrorCode code, string? context, Exception innerException)
-        : base(FormatMessage(code, context), innerException)
+    public TidesDBException(int errorCode, string? context = null)
+        : this((ErrorCode)errorCode, context)
     {
-        Code = code;
-        Context = context;
     }
 
-    private static string FormatMessage(ErrorCode code, string? context)
+    private static string FormatMessage(ErrorCode errorCode, string? context)
     {
-        var errorMsg = code switch
+        var message = errorCode switch
         {
             ErrorCode.Success => "success",
             ErrorCode.Memory => "memory allocation failed",
             ErrorCode.InvalidArgs => "invalid arguments",
             ErrorCode.NotFound => "not found",
-            ErrorCode.IO => "I/O error",
+            ErrorCode.Io => "I/O error",
             ErrorCode.Corruption => "data corruption",
             ErrorCode.Exists => "already exists",
             ErrorCode.Conflict => "transaction conflict",
@@ -71,19 +56,16 @@ public class TidesDBException : Exception
             _ => "unknown error"
         };
 
-        return string.IsNullOrEmpty(context)
-            ? $"{errorMsg} (code: {(int)code})"
-            : $"{context}: {errorMsg} (code: {(int)code})";
+        return context is not null
+            ? $"{context}: {message} (code: {(int)errorCode})"
+            : $"{message} (code: {(int)errorCode})";
     }
 
-    /// <summary>
-    /// Checks the result code and throws if it indicates an error.
-    /// </summary>
-    internal static void CheckResult(int result, string? context = null)
+    internal static void ThrowIfError(int result, string? context = null)
     {
-        if (result != Native.TDB_SUCCESS)
+        if (result != 0)
         {
-            throw new TidesDBException((ErrorCode)result, context);
+            throw new TidesDBException(result, context);
         }
     }
 }

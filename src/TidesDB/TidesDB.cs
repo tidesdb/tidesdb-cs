@@ -1,4 +1,3 @@
-// Package TidesDB
 // Copyright (C) TidesDB
 //
 // Original Author: Alex Gaetano Padula
@@ -7,7 +6,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	https://www.mozilla.org/en-US/MPL/2.0/
+//     https://www.mozilla.org/en-US/MPL/2.0/
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,80 +16,67 @@
 
 using System.Runtime.InteropServices;
 using System.Text;
+using TidesDB.Native;
 
 namespace TidesDB;
 
 /// <summary>
-/// TidesDB is a high-performance embedded key-value storage engine.
+/// TidesDB database instance.
 /// </summary>
-public class TidesDB : IDisposable
+public sealed class TidesDb : IDisposable
 {
-    private IntPtr _handle;
+    private nint _handle;
     private bool _disposed;
+    private nint _dbPathPtr;
 
-    private TidesDB(IntPtr handle)
+    private TidesDb(nint handle, nint dbPathPtr)
     {
         _handle = handle;
+        _dbPathPtr = dbPathPtr;
     }
 
     /// <summary>
-    /// Opens a TidesDB database with the specified configuration.
+    /// Opens a TidesDB instance with the given configuration.
     /// </summary>
     /// <param name="config">The database configuration.</param>
     /// <returns>A new TidesDB instance.</returns>
-    public static TidesDB Open(Config config)
+    public static TidesDb Open(Config config)
     {
         var dbPathPtr = Marshal.StringToHGlobalAnsi(config.DbPath);
-        try
+        
+        var nativeConfig = new NativeConfig
         {
-            var nativeConfig = new Native.tidesdb_config_t
-            {
-                db_path = dbPathPtr,
-                num_flush_threads = config.NumFlushThreads,
-                num_compaction_threads = config.NumCompactionThreads,
-                log_level = (int)config.LogLevel,
-                block_cache_size = (nuint)config.BlockCacheSize,
-                max_open_sstables = (nuint)config.MaxOpenSSTables
-            };
+            DbPath = dbPathPtr,
+            NumFlushThreads = config.NumFlushThreads,
+            NumCompactionThreads = config.NumCompactionThreads,
+            LogLevel = (int)config.LogLevel,
+            BlockCacheSize = (nuint)config.BlockCacheSize,
+            MaxOpenSstables = (nuint)config.MaxOpenSstables
+        };
 
-            var result = Native.tidesdb_open(ref nativeConfig, out var dbPtr);
-            TidesDBException.CheckResult(result, "failed to open database");
-
-            return new TidesDB(dbPtr);
-        }
-        finally
+        var result = NativeMethods.tidesdb_open(ref nativeConfig, out var dbHandle);
+        if (result != 0)
         {
             Marshal.FreeHGlobal(dbPathPtr);
+            throw new TidesDBException(result, "failed to open database");
         }
+
+        return new TidesDb(dbHandle, dbPathPtr);
     }
 
     /// <summary>
-    /// Closes the database.
-    /// </summary>
-    public void Close()
-    {
-        if (!_disposed && _handle != IntPtr.Zero)
-        {
-            var result = Native.tidesdb_close(_handle);
-            _handle = IntPtr.Zero;
-            _disposed = true;
-            TidesDBException.CheckResult(result, "failed to close database");
-        }
-    }
-
-    /// <summary>
-    /// Creates a new column family with the specified configuration.
+    /// Creates a new column family with the given configuration.
     /// </summary>
     /// <param name="name">The column family name.</param>
-    /// <param name="config">The column family configuration (optional, uses defaults if null).</param>
+    /// <param name="config">The column family configuration.</param>
     public void CreateColumnFamily(string name, ColumnFamilyConfig? config = null)
     {
         ThrowIfDisposed();
-        config ??= ColumnFamilyConfig.Default();
+        config ??= ColumnFamilyConfig.Default;
 
-        var nativeConfig = ToNativeConfig(config);
-        var result = Native.tidesdb_create_column_family(_handle, name, ref nativeConfig);
-        TidesDBException.CheckResult(result, "failed to create column family");
+        var nativeConfig = CreateNativeColumnFamilyConfig(config);
+        var result = NativeMethods.tidesdb_create_column_family(_handle, name, ref nativeConfig);
+        TidesDBException.ThrowIfError(result, "failed to create column family");
     }
 
     /// <summary>
@@ -100,24 +86,20 @@ public class TidesDB : IDisposable
     public void DropColumnFamily(string name)
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_drop_column_family(_handle, name);
-        TidesDBException.CheckResult(result, "failed to drop column family");
+        var result = NativeMethods.tidesdb_drop_column_family(_handle, name);
+        TidesDBException.ThrowIfError(result, "failed to drop column family");
     }
 
     /// <summary>
     /// Gets a column family by name.
     /// </summary>
     /// <param name="name">The column family name.</param>
-    /// <returns>The column family.</returns>
-    public ColumnFamily GetColumnFamily(string name)
+    /// <returns>The column family, or null if not found.</returns>
+    public ColumnFamily? GetColumnFamily(string name)
     {
         ThrowIfDisposed();
-        var cfPtr = Native.tidesdb_get_column_family(_handle, name);
-        if (cfPtr == IntPtr.Zero)
-        {
-            throw new TidesDBException(ErrorCode.NotFound, $"column family not found: {name}");
-        }
-        return new ColumnFamily(cfPtr, name);
+        var cfHandle = NativeMethods.tidesdb_get_column_family(_handle, name);
+        return cfHandle == nint.Zero ? null : new ColumnFamily(cfHandle);
     }
 
     /// <summary>
@@ -127,41 +109,36 @@ public class TidesDB : IDisposable
     public string[] ListColumnFamilies()
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_list_column_families(_handle, out var namesPtr, out var count);
-        TidesDBException.CheckResult(result, "failed to list column families");
+        var result = NativeMethods.tidesdb_list_column_families(_handle, out var namesPtr, out var count);
+        TidesDBException.ThrowIfError(result, "failed to list column families");
 
-        if (count == 0 || namesPtr == IntPtr.Zero)
+        if (count == 0)
         {
-            return Array.Empty<string>();
+            return [];
         }
 
-        try
+        var names = new string[count];
+        for (int i = 0; i < count; i++)
         {
-            var names = new string[count];
-            for (int i = 0; i < count; i++)
-            {
-                var strPtr = Marshal.ReadIntPtr(namesPtr, i * IntPtr.Size);
-                names[i] = Marshal.PtrToStringAnsi(strPtr) ?? "";
-                Native.Free(strPtr);
-            }
-            return names;
+            var namePtr = Marshal.ReadIntPtr(namesPtr, i * nint.Size);
+            names[i] = Marshal.PtrToStringAnsi(namePtr) ?? "";
+            NativeMethods.tidesdb_free(namePtr);
         }
-        finally
-        {
-            Native.Free(namesPtr);
-        }
+        NativeMethods.tidesdb_free(namesPtr);
+
+        return names;
     }
 
     /// <summary>
-    /// Begins a new transaction with the default isolation level.
+    /// Begins a new transaction with default isolation level.
     /// </summary>
     /// <returns>A new transaction.</returns>
     public Transaction BeginTransaction()
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_txn_begin(_handle, out var txnPtr);
-        TidesDBException.CheckResult(result, "failed to begin transaction");
-        return new Transaction(txnPtr);
+        var result = NativeMethods.tidesdb_txn_begin(_handle, out var txnHandle);
+        TidesDBException.ThrowIfError(result, "failed to begin transaction");
+        return new Transaction(txnHandle);
     }
 
     /// <summary>
@@ -169,12 +146,24 @@ public class TidesDB : IDisposable
     /// </summary>
     /// <param name="isolation">The isolation level.</param>
     /// <returns>A new transaction.</returns>
-    public Transaction BeginTransactionWithIsolation(IsolationLevel isolation)
+    public Transaction BeginTransaction(IsolationLevel isolation)
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_txn_begin_with_isolation(_handle, (int)isolation, out var txnPtr);
-        TidesDBException.CheckResult(result, "failed to begin transaction with isolation");
-        return new Transaction(txnPtr);
+        var result = NativeMethods.tidesdb_txn_begin_with_isolation(_handle, (int)isolation, out var txnHandle);
+        TidesDBException.ThrowIfError(result, "failed to begin transaction with isolation");
+        return new Transaction(txnHandle);
+    }
+
+    /// <summary>
+    /// Registers a custom comparator with the database.
+    /// </summary>
+    /// <param name="name">The comparator name.</param>
+    /// <param name="ctxStr">Optional context string.</param>
+    public void RegisterComparator(string name, string? ctxStr = null)
+    {
+        ThrowIfDisposed();
+        var result = NativeMethods.tidesdb_register_comparator(_handle, name, nint.Zero, ctxStr, nint.Zero);
+        TidesDBException.ThrowIfError(result, "failed to register comparator");
     }
 
     /// <summary>
@@ -184,56 +173,58 @@ public class TidesDB : IDisposable
     public CacheStats GetCacheStats()
     {
         ThrowIfDisposed();
-        var nativeStats = new Native.tidesdb_cache_stats_t();
-        var result = Native.tidesdb_get_cache_stats(_handle, ref nativeStats);
-        TidesDBException.CheckResult(result, "failed to get cache stats");
+        var nativeStats = new NativeCacheStats();
+        var result = NativeMethods.tidesdb_get_cache_stats(_handle, ref nativeStats);
+        TidesDBException.ThrowIfError(result, "failed to get cache stats");
 
         return new CacheStats
         {
-            Enabled = nativeStats.enabled != 0,
-            TotalEntries = (ulong)nativeStats.total_entries,
-            TotalBytes = (ulong)nativeStats.total_bytes,
-            Hits = nativeStats.hits,
-            Misses = nativeStats.misses,
-            HitRate = nativeStats.hit_rate,
-            NumPartitions = (ulong)nativeStats.num_partitions
+            Enabled = nativeStats.Enabled != 0,
+            TotalEntries = (ulong)nativeStats.TotalEntries,
+            TotalBytes = (ulong)nativeStats.TotalBytes,
+            Hits = nativeStats.Hits,
+            Misses = nativeStats.Misses,
+            HitRate = nativeStats.HitRate,
+            NumPartitions = (ulong)nativeStats.NumPartitions
         };
     }
 
-    private static unsafe Native.tidesdb_column_family_config_t ToNativeConfig(ColumnFamilyConfig config)
+    private static unsafe NativeColumnFamilyConfig CreateNativeColumnFamilyConfig(ColumnFamilyConfig config)
     {
-        var nativeConfig = new Native.tidesdb_column_family_config_t
+        var nativeConfig = new NativeColumnFamilyConfig
         {
-            write_buffer_size = (nuint)config.WriteBufferSize,
-            level_size_ratio = (nuint)config.LevelSizeRatio,
-            min_levels = config.MinLevels,
-            dividing_level_offset = config.DividingLevelOffset,
-            klog_value_threshold = (nuint)config.KlogValueThreshold,
-            compression_algo = (int)config.CompressionAlgorithm,
-            enable_bloom_filter = config.EnableBloomFilter ? 1 : 0,
-            bloom_fpr = config.BloomFpr,
-            enable_block_indexes = config.EnableBlockIndexes ? 1 : 0,
-            index_sample_ratio = config.IndexSampleRatio,
-            block_index_prefix_len = config.BlockIndexPrefixLen,
-            sync_mode = (int)config.SyncMode,
-            sync_interval_us = config.SyncIntervalUs,
-            skip_list_max_level = config.SkipListMaxLevel,
-            skip_list_probability = config.SkipListProbability,
-            default_isolation_level = (int)config.DefaultIsolationLevel,
-            min_disk_space = config.MinDiskSpace,
-            l1_file_count_trigger = config.L1FileCountTrigger,
-            l0_queue_stall_threshold = config.L0QueueStallThreshold
+            WriteBufferSize = (nuint)config.WriteBufferSize,
+            LevelSizeRatio = (nuint)config.LevelSizeRatio,
+            MinLevels = config.MinLevels,
+            DividingLevelOffset = config.DividingLevelOffset,
+            KlogValueThreshold = (nuint)config.KlogValueThreshold,
+            CompressionAlgo = (int)config.CompressionAlgorithm,
+            EnableBloomFilter = config.EnableBloomFilter ? 1 : 0,
+            BloomFpr = config.BloomFpr,
+            EnableBlockIndexes = config.EnableBlockIndexes ? 1 : 0,
+            IndexSampleRatio = config.IndexSampleRatio,
+            BlockIndexPrefixLen = config.BlockIndexPrefixLen,
+            SyncMode = (int)config.SyncMode,
+            SyncIntervalUs = config.SyncIntervalUs,
+            SkipListMaxLevel = config.SkipListMaxLevel,
+            SkipListProbability = config.SkipListProbability,
+            DefaultIsolationLevel = (int)config.DefaultIsolationLevel,
+            MinDiskSpace = config.MinDiskSpace,
+            L1FileCountTrigger = config.L1FileCountTrigger,
+            L0QueueStallThreshold = config.L0QueueStallThreshold,
+            ComparatorFnCached = nint.Zero,
+            ComparatorCtxCached = nint.Zero
         };
 
         if (!string.IsNullOrEmpty(config.ComparatorName))
         {
-            var bytes = Encoding.ASCII.GetBytes(config.ComparatorName);
-            var len = Math.Min(bytes.Length, Native.TDB_MAX_COMPARATOR_NAME - 1);
-            for (int i = 0; i < len; i++)
+            var nameBytes = Encoding.UTF8.GetBytes(config.ComparatorName);
+            var copyLen = Math.Min(nameBytes.Length, 63);
+            for (int i = 0; i < copyLen; i++)
             {
-                nativeConfig.comparator_name[i] = bytes[i];
+                nativeConfig.ComparatorName[i] = nameBytes[i];
             }
-            nativeConfig.comparator_name[len] = 0;
+            nativeConfig.ComparatorName[copyLen] = 0;
         }
 
         return nativeConfig;
@@ -241,23 +232,24 @@ public class TidesDB : IDisposable
 
     private void ThrowIfDisposed()
     {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(TidesDB));
-        }
+        ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
-    /// <summary>
-    /// Releases the database resources.
-    /// </summary>
     public void Dispose()
     {
-        Close();
-        GC.SuppressFinalize(this);
-    }
+        if (_disposed) return;
+        _disposed = true;
 
-    ~TidesDB()
-    {
-        Close();
+        if (_handle != nint.Zero)
+        {
+            NativeMethods.tidesdb_close(_handle);
+            _handle = nint.Zero;
+        }
+
+        if (_dbPathPtr != nint.Zero)
+        {
+            Marshal.FreeHGlobal(_dbPathPtr);
+            _dbPathPtr = nint.Zero;
+        }
     }
 }

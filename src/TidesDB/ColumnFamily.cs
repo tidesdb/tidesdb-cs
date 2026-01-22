@@ -1,4 +1,3 @@
-// Package TidesDB
 // Copyright (C) TidesDB
 //
 // Original Author: Alex Gaetano Padula
@@ -7,7 +6,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	https://www.mozilla.org/en-US/MPL/2.0/
+//     https://www.mozilla.org/en-US/MPL/2.0/
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,79 +15,20 @@
 // limitations under the License.
 
 using System.Runtime.InteropServices;
+using TidesDB.Native;
 
 namespace TidesDB;
 
 /// <summary>
-/// a TidesDB column family -- an isolated key-value store with independent configuration.
+/// Represents a TidesDB column family (isolated key-value store).
 /// </summary>
-public class ColumnFamily
+public sealed class ColumnFamily
 {
-    internal IntPtr Handle { get; }
+    internal readonly nint Handle;
 
-    /// <summary>
-    /// Gets the name of this column family.
-    /// </summary>
-    public string Name { get; }
-
-    internal ColumnFamily(IntPtr handle, string name)
+    internal ColumnFamily(nint handle)
     {
         Handle = handle;
-        Name = name;
-    }
-
-    /// <summary>
-    /// Gets statistics about this column family.
-    /// </summary>
-    public Stats GetStats()
-    {
-        var result = Native.tidesdb_get_stats(Handle, out var statsPtr);
-        TidesDBException.CheckResult(result, "failed to get stats");
-
-        try
-        {
-            var nativeStats = Marshal.PtrToStructure<Native.tidesdb_stats_t>(statsPtr);
-            
-            var stats = new Stats
-            {
-                NumLevels = nativeStats.num_levels,
-                MemtableSize = (ulong)nativeStats.memtable_size
-            };
-
-            if (nativeStats.num_levels > 0)
-            {
-                var levelSizes = new ulong[nativeStats.num_levels];
-                var levelNumSSTables = new int[nativeStats.num_levels];
-
-                if (nativeStats.level_sizes != IntPtr.Zero)
-                {
-                    for (int i = 0; i < nativeStats.num_levels; i++)
-                    {
-                        // size_t is nuint (platform-dependent size)
-                        if (IntPtr.Size == 8)
-                            levelSizes[i] = (ulong)Marshal.ReadInt64(nativeStats.level_sizes, i * sizeof(long));
-                        else
-                            levelSizes[i] = (ulong)Marshal.ReadInt32(nativeStats.level_sizes, i * sizeof(int));
-                    }
-                }
-
-                if (nativeStats.level_num_sstables != IntPtr.Zero)
-                {
-                    for (int i = 0; i < nativeStats.num_levels; i++)
-                    {
-                        levelNumSSTables[i] = Marshal.ReadInt32(nativeStats.level_num_sstables, i * sizeof(int));
-                    }
-                }
-
-                stats = stats with { LevelSizes = levelSizes, LevelNumSSTables = levelNumSSTables };
-            }
-
-            return stats;
-        }
-        finally
-        {
-            Native.tidesdb_free_stats(statsPtr);
-        }
     }
 
     /// <summary>
@@ -96,8 +36,8 @@ public class ColumnFamily
     /// </summary>
     public void Compact()
     {
-        var result = Native.tidesdb_compact(Handle);
-        TidesDBException.CheckResult(result, "failed to compact column family");
+        var result = NativeMethods.tidesdb_compact(Handle);
+        TidesDBException.ThrowIfError(result, "failed to compact column family");
     }
 
     /// <summary>
@@ -105,7 +45,60 @@ public class ColumnFamily
     /// </summary>
     public void FlushMemtable()
     {
-        var result = Native.tidesdb_flush_memtable(Handle);
-        TidesDBException.CheckResult(result, "failed to flush memtable");
+        var result = NativeMethods.tidesdb_flush_memtable(Handle);
+        TidesDBException.ThrowIfError(result, "failed to flush memtable");
+    }
+
+    /// <summary>
+    /// Gets statistics about this column family.
+    /// </summary>
+    public Stats GetStats()
+    {
+        var result = NativeMethods.tidesdb_get_stats(Handle, out var statsPtr);
+        TidesDBException.ThrowIfError(result, "failed to get stats");
+
+        try
+        {
+            var nativeStats = Marshal.PtrToStructure<NativeStats>(statsPtr);
+            var stats = new Stats
+            {
+                NumLevels = nativeStats.NumLevels,
+                MemtableSize = (ulong)nativeStats.MemtableSize
+            };
+
+            if (nativeStats.NumLevels > 0)
+            {
+                var levelSizes = new ulong[nativeStats.NumLevels];
+                var levelNumSstables = new int[nativeStats.NumLevels];
+
+                if (nativeStats.LevelSizes != nint.Zero)
+                {
+                    for (int i = 0; i < nativeStats.NumLevels; i++)
+                    {
+                        levelSizes[i] = (ulong)Marshal.ReadIntPtr(nativeStats.LevelSizes, i * nint.Size);
+                    }
+                }
+
+                if (nativeStats.LevelNumSstables != nint.Zero)
+                {
+                    for (int i = 0; i < nativeStats.NumLevels; i++)
+                    {
+                        levelNumSstables[i] = Marshal.ReadInt32(nativeStats.LevelNumSstables, i * sizeof(int));
+                    }
+                }
+
+                return stats with
+                {
+                    LevelSizes = levelSizes,
+                    LevelNumSstables = levelNumSstables
+                };
+            }
+
+            return stats;
+        }
+        finally
+        {
+            NativeMethods.tidesdb_free_stats(statsPtr);
+        }
     }
 }

@@ -1,4 +1,3 @@
-// Package TidesDB
 // Copyright (C) TidesDB
 //
 // Original Author: Alex Gaetano Padula
@@ -7,7 +6,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	https://www.mozilla.org/en-US/MPL/2.0/
+//     https://www.mozilla.org/en-US/MPL/2.0/
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,102 +15,115 @@
 // limitations under the License.
 
 using System.Runtime.InteropServices;
+using TidesDB.Native;
 
 namespace TidesDB;
 
 /// <summary>
-/// Is a TidesDB transaction for ACID operations.
+/// Represents a TidesDB transaction.
 /// </summary>
-public class Transaction : IDisposable
+public sealed class Transaction : IDisposable
 {
-    private IntPtr _handle;
+    private nint _handle;
     private bool _disposed;
 
-    internal Transaction(IntPtr handle)
+    internal Transaction(nint handle)
     {
         _handle = handle;
     }
 
     /// <summary>
-    /// Puts a key-value pair into the specified column family.
+    /// Puts a key-value pair into the transaction.
     /// </summary>
     /// <param name="cf">The column family.</param>
     /// <param name="key">The key.</param>
     /// <param name="value">The value.</param>
-    /// <param name="ttl">TTL as Unix timestamp (seconds since epoch), or -1 for no expiration.</param>
-    public void Put(ColumnFamily cf, byte[] key, byte[] value, long ttl = -1)
+    /// <param name="ttl">Unix timestamp for expiration, or -1 for no expiration.</param>
+    public void Put(ColumnFamily cf, ReadOnlySpan<byte> key, ReadOnlySpan<byte> value, long ttl = -1)
     {
         ThrowIfDisposed();
+        int result;
         unsafe
         {
             fixed (byte* keyPtr = key)
             fixed (byte* valuePtr = value)
             {
-                var result = Native.tidesdb_txn_put(
+                result = NativeMethods.tidesdb_txn_put(
                     _handle, cf.Handle,
-                    (IntPtr)keyPtr, (nuint)key.Length,
-                    (IntPtr)valuePtr, (nuint)value.Length,
+                    keyPtr, (nuint)key.Length,
+                    valuePtr, (nuint)value.Length,
                     ttl);
-                TidesDBException.CheckResult(result, "failed to put key-value pair");
             }
         }
+        TidesDBException.ThrowIfError(result, "failed to put key-value pair");
     }
 
     /// <summary>
-    /// Gets a value from the specified column family.
+    /// Gets a value from the transaction.
     /// </summary>
     /// <param name="cf">The column family.</param>
     /// <param name="key">The key.</param>
-    /// <returns>The value.</returns>
-    public byte[] Get(ColumnFamily cf, byte[] key)
+    /// <returns>The value, or null if not found.</returns>
+    public byte[]? Get(ColumnFamily cf, ReadOnlySpan<byte> key)
     {
         ThrowIfDisposed();
+        int result;
+        nint valuePtr;
+        nuint valueSize;
+
         unsafe
         {
             fixed (byte* keyPtr = key)
             {
-                var result = Native.tidesdb_txn_get(
+                result = NativeMethods.tidesdb_txn_get(
                     _handle, cf.Handle,
-                    (IntPtr)keyPtr, (nuint)key.Length,
-                    out var valuePtr, out var valueSize);
-                TidesDBException.CheckResult(result, "failed to get value");
-
-                var value = new byte[(int)valueSize];
-                Marshal.Copy(valuePtr, value, 0, (int)valueSize);
-                Native.Free(valuePtr);
-                return value;
+                    keyPtr, (nuint)key.Length,
+                    out valuePtr, out valueSize);
             }
         }
+
+        if (result == (int)ErrorCode.NotFound)
+        {
+            return null;
+        }
+
+        TidesDBException.ThrowIfError(result, "failed to get value");
+
+        var value = new byte[(int)valueSize];
+        Marshal.Copy(valuePtr, value, 0, (int)valueSize);
+        NativeMethods.tidesdb_free(valuePtr);
+        return value;
     }
 
     /// <summary>
-    /// Deletes a key from the specified column family.
+    /// Deletes a key-value pair from the transaction.
     /// </summary>
     /// <param name="cf">The column family.</param>
     /// <param name="key">The key.</param>
-    public void Delete(ColumnFamily cf, byte[] key)
+    public void Delete(ColumnFamily cf, ReadOnlySpan<byte> key)
     {
         ThrowIfDisposed();
+        int result;
         unsafe
         {
             fixed (byte* keyPtr = key)
             {
-                var result = Native.tidesdb_txn_delete(
+                result = NativeMethods.tidesdb_txn_delete(
                     _handle, cf.Handle,
-                    (IntPtr)keyPtr, (nuint)key.Length);
-                TidesDBException.CheckResult(result, "failed to delete key");
+                    keyPtr, (nuint)key.Length);
             }
         }
+        TidesDBException.ThrowIfError(result, "failed to delete key");
     }
 
     /// <summary>
-    /// Commits the transaction atomically.
+    /// Commits the transaction.
     /// </summary>
     public void Commit()
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_txn_commit(_handle);
-        TidesDBException.CheckResult(result, "failed to commit transaction");
+        var result = NativeMethods.tidesdb_txn_commit(_handle);
+        TidesDBException.ThrowIfError(result, "failed to commit transaction");
     }
 
     /// <summary>
@@ -120,8 +132,8 @@ public class Transaction : IDisposable
     public void Rollback()
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_txn_rollback(_handle);
-        TidesDBException.CheckResult(result, "failed to rollback transaction");
+        var result = NativeMethods.tidesdb_txn_rollback(_handle);
+        TidesDBException.ThrowIfError(result, "failed to rollback transaction");
     }
 
     /// <summary>
@@ -131,19 +143,19 @@ public class Transaction : IDisposable
     public void Savepoint(string name)
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_txn_savepoint(_handle, name);
-        TidesDBException.CheckResult(result, "failed to create savepoint");
+        var result = NativeMethods.tidesdb_txn_savepoint(_handle, name);
+        TidesDBException.ThrowIfError(result, "failed to create savepoint");
     }
 
     /// <summary>
-    /// Rollback to a savepoint, discarding all operations after it.
+    /// Rolls back the transaction to a savepoint.
     /// </summary>
     /// <param name="name">The savepoint name.</param>
     public void RollbackToSavepoint(string name)
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_txn_rollback_to_savepoint(_handle, name);
-        TidesDBException.CheckResult(result, "failed to rollback to savepoint");
+        var result = NativeMethods.tidesdb_txn_rollback_to_savepoint(_handle, name);
+        TidesDBException.ThrowIfError(result, "failed to rollback to savepoint");
     }
 
     /// <summary>
@@ -153,47 +165,37 @@ public class Transaction : IDisposable
     public void ReleaseSavepoint(string name)
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_txn_release_savepoint(_handle, name);
-        TidesDBException.CheckResult(result, "failed to release savepoint");
+        var result = NativeMethods.tidesdb_txn_release_savepoint(_handle, name);
+        TidesDBException.ThrowIfError(result, "failed to release savepoint");
     }
 
     /// <summary>
-    /// Creates a new iterator for the specified column family.
+    /// Creates a new iterator for a column family within this transaction.
     /// </summary>
     /// <param name="cf">The column family.</param>
     /// <returns>A new iterator.</returns>
     public Iterator NewIterator(ColumnFamily cf)
     {
         ThrowIfDisposed();
-        var result = Native.tidesdb_iter_new(_handle, cf.Handle, out var iterPtr);
-        TidesDBException.CheckResult(result, "failed to create iterator");
-        return new Iterator(iterPtr);
+        var result = NativeMethods.tidesdb_iter_new(_handle, cf.Handle, out var iterHandle);
+        TidesDBException.ThrowIfError(result, "failed to create iterator");
+        return new Iterator(iterHandle);
     }
 
     private void ThrowIfDisposed()
     {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(Transaction));
-        }
+        ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
-    /// <summary>
-    /// Releases the transaction resources.
-    /// </summary>
     public void Dispose()
     {
-        if (!_disposed && _handle != IntPtr.Zero)
-        {
-            Native.tidesdb_txn_free(_handle);
-            _handle = IntPtr.Zero;
-            _disposed = true;
-        }
-        GC.SuppressFinalize(this);
-    }
+        if (_disposed) return;
+        _disposed = true;
 
-    ~Transaction()
-    {
-        Dispose();
+        if (_handle != nint.Zero)
+        {
+            NativeMethods.tidesdb_txn_free(_handle);
+            _handle = nint.Zero;
+        }
     }
 }

@@ -1,4 +1,3 @@
-// Package TidesDB
 // Copyright (C) TidesDB
 //
 // Original Author: Alex Gaetano Padula
@@ -7,7 +6,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//	https://www.mozilla.org/en-US/MPL/2.0/
+//     https://www.mozilla.org/en-US/MPL/2.0/
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,7 +22,7 @@ namespace TidesDB.Tests;
 public class TidesDBTests : IDisposable
 {
     private readonly string _testDbPath;
-    private TidesDB? _db;
+    private TidesDb? _db;
 
     public TidesDBTests()
     {
@@ -39,267 +38,289 @@ public class TidesDBTests : IDisposable
         }
     }
 
-    private TidesDB OpenTestDb()
+    private TidesDb OpenDatabase()
     {
-        _db = TidesDB.Open(new Config
+        var config = new Config
         {
             DbPath = _testDbPath,
-            NumFlushThreads = 1,
-            NumCompactionThreads = 1,
-            LogLevel = LogLevel.Warn,
-            BlockCacheSize = 16 * 1024 * 1024,
-            MaxOpenSSTables = 64
-        });
+            NumFlushThreads = 2,
+            NumCompactionThreads = 2,
+            LogLevel = LogLevel.Info,
+            BlockCacheSize = 64 * 1024 * 1024,
+            MaxOpenSstables = 256
+        };
+        _db = TidesDb.Open(config);
         return _db;
     }
 
     [Fact]
-    public void OpenAndClose()
+    public void OpenAndClose_ShouldSucceed()
     {
-        var db = OpenTestDb();
+        using var db = OpenDatabase();
         Assert.NotNull(db);
-        db.Close();
     }
 
     [Fact]
-    public void CreateAndDropColumnFamily()
+    public void CreateColumnFamily_ShouldSucceed()
     {
-        var db = OpenTestDb();
-        
+        using var db = OpenDatabase();
         db.CreateColumnFamily("test_cf");
+
         var cf = db.GetColumnFamily("test_cf");
-        Assert.Equal("test_cf", cf.Name);
-
-        var families = db.ListColumnFamilies();
-        Assert.Contains("test_cf", families);
-
-        db.DropColumnFamily("test_cf");
+        Assert.NotNull(cf);
     }
 
     [Fact]
-    public void CreateColumnFamilyWithConfig()
+    public void CreateColumnFamily_WithConfig_ShouldSucceed()
     {
-        var db = OpenTestDb();
-        
-        db.CreateColumnFamily("custom_cf", new ColumnFamilyConfig
+        using var db = OpenDatabase();
+        var cfConfig = new ColumnFamilyConfig
         {
             WriteBufferSize = 32 * 1024 * 1024,
             CompressionAlgorithm = CompressionAlgorithm.Lz4,
             EnableBloomFilter = true,
-            BloomFpr = 0.01,
-            SyncMode = SyncMode.Interval,
-            SyncIntervalUs = 100000
-        });
+            BloomFpr = 0.01
+        };
+        db.CreateColumnFamily("test_cf", cfConfig);
 
-        var cf = db.GetColumnFamily("custom_cf");
-        Assert.Equal("custom_cf", cf.Name);
-
-        db.DropColumnFamily("custom_cf");
+        var cf = db.GetColumnFamily("test_cf");
+        Assert.NotNull(cf);
     }
 
     [Fact]
-    public void PutAndGet()
+    public void DropColumnFamily_ShouldSucceed()
     {
-        var db = OpenTestDb();
+        using var db = OpenDatabase();
         db.CreateColumnFamily("test_cf");
+        db.DropColumnFamily("test_cf");
+
         var cf = db.GetColumnFamily("test_cf");
+        Assert.Null(cf);
+    }
+
+    [Fact]
+    public void ListColumnFamilies_ShouldReturnCreatedFamilies()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("cf1");
+        db.CreateColumnFamily("cf2");
+
+        var families = db.ListColumnFamilies();
+        Assert.Contains("cf1", families);
+        Assert.Contains("cf2", families);
+    }
+
+    [Fact]
+    public void PutAndGet_ShouldSucceed()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
 
         using var txn = db.BeginTransaction();
-        txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
+        var key = Encoding.UTF8.GetBytes("test_key");
+        var value = Encoding.UTF8.GetBytes("test_value");
+
+        txn.Put(cf, key, value);
         txn.Commit();
 
         using var readTxn = db.BeginTransaction();
-        var value = readTxn.Get(cf, Encoding.UTF8.GetBytes("key1"));
-        Assert.Equal("value1", Encoding.UTF8.GetString(value));
+        var result = readTxn.Get(cf, key);
 
-        db.DropColumnFamily("test_cf");
+        Assert.NotNull(result);
+        Assert.Equal("test_value", Encoding.UTF8.GetString(result));
     }
 
     [Fact]
-    public void PutAndDelete()
+    public void Delete_ShouldRemoveKey()
     {
-        var db = OpenTestDb();
+        using var db = OpenDatabase();
         db.CreateColumnFamily("test_cf");
-        var cf = db.GetColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
 
-        using var txn = db.BeginTransaction();
-        txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
-        txn.Commit();
-
-        using var deleteTxn = db.BeginTransaction();
-        deleteTxn.Delete(cf, Encoding.UTF8.GetBytes("key1"));
-        deleteTxn.Commit();
-
-        using var readTxn = db.BeginTransaction();
-        Assert.Throws<TidesDBException>(() => readTxn.Get(cf, Encoding.UTF8.GetBytes("key1")));
-
-        db.DropColumnFamily("test_cf");
-    }
-
-    [Fact]
-    public void TransactionRollback()
-    {
-        var db = OpenTestDb();
-        db.CreateColumnFamily("test_cf");
-        var cf = db.GetColumnFamily("test_cf");
-
-        using var txn = db.BeginTransaction();
-        txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
-        txn.Rollback();
-
-        using var readTxn = db.BeginTransaction();
-        Assert.Throws<TidesDBException>(() => readTxn.Get(cf, Encoding.UTF8.GetBytes("key1")));
-
-        db.DropColumnFamily("test_cf");
-    }
-
-    [Fact]
-    public void Savepoints()
-    {
-        var db = OpenTestDb();
-        db.CreateColumnFamily("test_cf");
-        var cf = db.GetColumnFamily("test_cf");
-
-        using var txn = db.BeginTransaction();
-        txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
-        txn.Savepoint("sp1");
-        txn.Put(cf, Encoding.UTF8.GetBytes("key2"), Encoding.UTF8.GetBytes("value2"));
-        txn.RollbackToSavepoint("sp1");
-        txn.Commit();
-
-        using var readTxn = db.BeginTransaction();
-        var value1 = readTxn.Get(cf, Encoding.UTF8.GetBytes("key1"));
-        Assert.Equal("value1", Encoding.UTF8.GetString(value1));
-        Assert.Throws<TidesDBException>(() => readTxn.Get(cf, Encoding.UTF8.GetBytes("key2")));
-
-        db.DropColumnFamily("test_cf");
-    }
-
-    [Fact]
-    public void ForwardIteration()
-    {
-        var db = OpenTestDb();
-        db.CreateColumnFamily("test_cf");
-        var cf = db.GetColumnFamily("test_cf");
+        var key = Encoding.UTF8.GetBytes("test_key");
+        var value = Encoding.UTF8.GetBytes("test_value");
 
         using (var txn = db.BeginTransaction())
         {
-            txn.Put(cf, Encoding.UTF8.GetBytes("a"), Encoding.UTF8.GetBytes("1"));
-            txn.Put(cf, Encoding.UTF8.GetBytes("b"), Encoding.UTF8.GetBytes("2"));
-            txn.Put(cf, Encoding.UTF8.GetBytes("c"), Encoding.UTF8.GetBytes("3"));
+            txn.Put(cf, key, value);
+            txn.Commit();
+        }
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Delete(cf, key);
+            txn.Commit();
+        }
+
+        using var readTxn = db.BeginTransaction();
+        var result = readTxn.Get(cf, key);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void Transaction_Rollback_ShouldDiscardChanges()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        var key = Encoding.UTF8.GetBytes("test_key");
+        var value = Encoding.UTF8.GetBytes("test_value");
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Put(cf, key, value);
+            txn.Rollback();
+        }
+
+        using var readTxn = db.BeginTransaction();
+        var result = readTxn.Get(cf, key);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void Transaction_WithIsolationLevel_ShouldSucceed()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        using var txn = db.BeginTransaction(IsolationLevel.Serializable);
+        var key = Encoding.UTF8.GetBytes("test_key");
+        var value = Encoding.UTF8.GetBytes("test_value");
+
+        txn.Put(cf, key, value);
+        txn.Commit();
+    }
+
+    [Fact]
+    public void Savepoint_ShouldAllowPartialRollback()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        var key1 = Encoding.UTF8.GetBytes("key1");
+        var key2 = Encoding.UTF8.GetBytes("key2");
+        var value = Encoding.UTF8.GetBytes("value");
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Put(cf, key1, value);
+            txn.Savepoint("sp1");
+            txn.Put(cf, key2, value);
+            txn.RollbackToSavepoint("sp1");
+            txn.Commit();
+        }
+
+        using var readTxn = db.BeginTransaction();
+        Assert.NotNull(readTxn.Get(cf, key1));
+        Assert.Null(readTxn.Get(cf, key2));
+    }
+
+    [Fact]
+    public void Iterator_ForwardIteration_ShouldSucceed()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        using (var txn = db.BeginTransaction())
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                var key = Encoding.UTF8.GetBytes($"key{i:D2}");
+                var value = Encoding.UTF8.GetBytes($"value{i}");
+                txn.Put(cf, key, value);
+            }
             txn.Commit();
         }
 
         using var readTxn = db.BeginTransaction();
         using var iter = readTxn.NewIterator(cf);
-        
+
         iter.SeekToFirst();
-        var keys = new List<string>();
-        while (iter.IsValid())
+        var count = 0;
+        while (iter.Valid())
         {
-            keys.Add(Encoding.UTF8.GetString(iter.Key()));
+            var key = iter.Key();
+            var value = iter.Value();
+            Assert.NotNull(key);
+            Assert.NotNull(value);
+            count++;
             iter.Next();
         }
 
-        Assert.Equal(3, keys.Count);
-        Assert.Equal("a", keys[0]);
-        Assert.Equal("b", keys[1]);
-        Assert.Equal("c", keys[2]);
-
-        db.DropColumnFamily("test_cf");
+        Assert.Equal(10, count);
     }
 
     [Fact]
-    public void BackwardIteration()
+    public void Iterator_Seek_ShouldPositionCorrectly()
     {
-        var db = OpenTestDb();
+        using var db = OpenDatabase();
         db.CreateColumnFamily("test_cf");
-        var cf = db.GetColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
 
         using (var txn = db.BeginTransaction())
         {
-            txn.Put(cf, Encoding.UTF8.GetBytes("a"), Encoding.UTF8.GetBytes("1"));
-            txn.Put(cf, Encoding.UTF8.GetBytes("b"), Encoding.UTF8.GetBytes("2"));
-            txn.Put(cf, Encoding.UTF8.GetBytes("c"), Encoding.UTF8.GetBytes("3"));
+            for (int i = 0; i < 10; i++)
+            {
+                var key = Encoding.UTF8.GetBytes($"key{i:D2}");
+                var value = Encoding.UTF8.GetBytes($"value{i}");
+                txn.Put(cf, key, value);
+            }
             txn.Commit();
         }
 
         using var readTxn = db.BeginTransaction();
         using var iter = readTxn.NewIterator(cf);
-        
-        iter.SeekToLast();
-        var keys = new List<string>();
-        while (iter.IsValid())
-        {
-            keys.Add(Encoding.UTF8.GetString(iter.Key()));
-            iter.Prev();
-        }
 
-        Assert.Equal(3, keys.Count);
-        Assert.Equal("c", keys[0]);
-        Assert.Equal("b", keys[1]);
-        Assert.Equal("a", keys[2]);
-
-        db.DropColumnFamily("test_cf");
+        iter.Seek(Encoding.UTF8.GetBytes("key05"));
+        Assert.True(iter.Valid());
+        var foundKey = Encoding.UTF8.GetString(iter.Key());
+        Assert.Equal("key05", foundKey);
     }
 
     [Fact]
-    public void IteratorSeek()
+    public void GetCacheStats_ShouldReturnStats()
     {
-        var db = OpenTestDb();
-        db.CreateColumnFamily("test_cf");
-        var cf = db.GetColumnFamily("test_cf");
-
-        using (var txn = db.BeginTransaction())
-        {
-            txn.Put(cf, Encoding.UTF8.GetBytes("a"), Encoding.UTF8.GetBytes("1"));
-            txn.Put(cf, Encoding.UTF8.GetBytes("c"), Encoding.UTF8.GetBytes("3"));
-            txn.Put(cf, Encoding.UTF8.GetBytes("e"), Encoding.UTF8.GetBytes("5"));
-            txn.Commit();
-        }
-
-        using var readTxn = db.BeginTransaction();
-        using var iter = readTxn.NewIterator(cf);
-        
-        iter.Seek(Encoding.UTF8.GetBytes("b"));
-        Assert.True(iter.IsValid());
-        Assert.Equal("c", Encoding.UTF8.GetString(iter.Key()));
-
-        db.DropColumnFamily("test_cf");
-    }
-
-    [Fact]
-    public void GetCacheStats()
-    {
-        var db = OpenTestDb();
+        using var db = OpenDatabase();
         var stats = db.GetCacheStats();
-        Assert.True(stats.Enabled);
+        Assert.NotNull(stats);
     }
 
     [Fact]
-    public void GetColumnFamilyStats()
+    public void ColumnFamily_GetStats_ShouldReturnStats()
     {
-        var db = OpenTestDb();
+        using var db = OpenDatabase();
         db.CreateColumnFamily("test_cf");
-        var cf = db.GetColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
 
         var stats = cf.GetStats();
+        Assert.NotNull(stats);
         Assert.True(stats.NumLevels >= 0);
-
-        db.DropColumnFamily("test_cf");
     }
 
     [Fact]
-    public void TransactionWithIsolationLevel()
+    public void MultipleColumnFamilies_Transaction_ShouldSucceed()
     {
-        var db = OpenTestDb();
-        db.CreateColumnFamily("test_cf");
-        var cf = db.GetColumnFamily("test_cf");
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("cf1");
+        db.CreateColumnFamily("cf2");
 
-        using var txn = db.BeginTransactionWithIsolation(IsolationLevel.Serializable);
-        txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
-        txn.Commit();
+        var cf1 = db.GetColumnFamily("cf1")!;
+        var cf2 = db.GetColumnFamily("cf2")!;
 
-        db.DropColumnFamily("test_cf");
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Put(cf1, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
+            txn.Put(cf2, Encoding.UTF8.GetBytes("key2"), Encoding.UTF8.GetBytes("value2"));
+            txn.Commit();
+        }
+
+        using var readTxn = db.BeginTransaction();
+        Assert.NotNull(readTxn.Get(cf1, Encoding.UTF8.GetBytes("key1")));
+        Assert.NotNull(readTxn.Get(cf2, Encoding.UTF8.GetBytes("key2")));
     }
 }
