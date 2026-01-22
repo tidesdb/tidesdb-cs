@@ -168,7 +168,6 @@ internal static class Native
     [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
     public static extern int tidesdb_get_cache_stats(IntPtr db, ref tidesdb_cache_stats_t stats);
 
-    // C runtime free function - use .NET's NativeMemory which handles cross-platform correctly
     public static unsafe void Free(IntPtr ptr)
     {
         if (ptr == IntPtr.Zero) return;

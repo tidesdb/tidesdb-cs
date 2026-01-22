@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 namespace TidesDB;
 
 /// <summary>
-/// Represents a TidesDB transaction for ACID operations.
+/// Is a TidesDB transaction for ACID operations.
 /// </summary>
 public class Transaction : IDisposable
 {
@@ -136,7 +136,7 @@ public class Transaction : IDisposable
     }
 
     /// <summary>
-    /// Rolls back to a savepoint, discarding all operations after it.
+    /// Rollback to a savepoint, discarding all operations after it.
     /// </summary>
     /// <param name="name">The savepoint name.</param>
     public void RollbackToSavepoint(string name)

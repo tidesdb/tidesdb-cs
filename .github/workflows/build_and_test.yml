@@ -147,10 +147,12 @@ jobs:
             -DBUILD_SHARED_LIBS=ON \
             -DTIDESDB_WITH_SANITIZER=OFF \
             -DTIDESDB_BUILD_TESTS=OFF \
+            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--export-all-symbols" \
             -S . -B build
           cmake --build build --config Release
           cmake --install build --prefix /mingw64
           cp build/libtidesdb.dll /mingw64/bin/ 2>/dev/null || true
+          cp build/libtidesdb.dll /mingw64/bin/tidesdb.dll 2>/dev/null || true
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
