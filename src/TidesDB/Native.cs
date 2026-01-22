@@ -211,37 +211,73 @@ internal static class Native
     public static extern int tidesdb_get_cache_stats(IntPtr db, ref tidesdb_cache_stats_t stats);
 
     // Free function for memory allocated by native C code using malloc
-    // We use NativeLibrary to load the C runtime and call free() directly
-    // This ensures we use the same allocator that the native library uses
-    private static readonly unsafe delegate* unmanaged[Cdecl]<void*, void> s_free = GetFreeFunction();
+    // Since TidesDB is linked against libc, we can get the free symbol from the TidesDB library itself
+    // This ensures we use the exact same allocator that TidesDB uses
+    private static IntPtr s_freePtr = IntPtr.Zero;
 
-    private static unsafe delegate* unmanaged[Cdecl]<void*, void> GetFreeFunction()
+    private static IntPtr GetFreePtr()
     {
-        IntPtr libHandle;
+        if (s_freePtr != IntPtr.Zero)
+            return s_freePtr;
+
+        // Try to get free from the TidesDB library first (it's linked against libc)
+        IntPtr tidesdbHandle = IntPtr.Zero;
         if (OperatingSystem.IsWindows())
         {
-            // On Windows, use ucrtbase.dll (Universal C Runtime)
-            libHandle = NativeLibrary.Load("ucrtbase.dll");
+            NativeLibrary.TryLoad("tidesdb", typeof(Native).Assembly, null, out tidesdbHandle);
         }
         else if (OperatingSystem.IsMacOS())
         {
-            // On macOS, use libSystem.B.dylib
-            libHandle = NativeLibrary.Load("libSystem.B.dylib");
+            NativeLibrary.TryLoad("libtidesdb.dylib", typeof(Native).Assembly, null, out tidesdbHandle);
         }
         else
         {
-            // On Linux, use libc.so.6
-            libHandle = NativeLibrary.Load("libc.so.6");
+            NativeLibrary.TryLoad("libtidesdb.so", typeof(Native).Assembly, null, out tidesdbHandle);
         }
 
-        var freePtr = NativeLibrary.GetExport(libHandle, "free");
-        return (delegate* unmanaged[Cdecl]<void*, void>)freePtr;
+        // Try to get free from the loaded TidesDB library (it re-exports libc symbols on most platforms)
+        if (tidesdbHandle != IntPtr.Zero && NativeLibrary.TryGetExport(tidesdbHandle, "free", out var freePtr))
+        {
+            s_freePtr = freePtr;
+            return s_freePtr;
+        }
+
+        // Fallback: load libc directly
+        IntPtr libcHandle = IntPtr.Zero;
+        if (OperatingSystem.IsWindows())
+        {
+            if (!NativeLibrary.TryLoad("ucrtbase", out libcHandle))
+                NativeLibrary.TryLoad("msvcrt", out libcHandle);
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            NativeLibrary.TryLoad("libSystem.B.dylib", out libcHandle);
+        }
+        else
+        {
+            // On Linux, try without version first, then with version
+            if (!NativeLibrary.TryLoad("libc", out libcHandle))
+                NativeLibrary.TryLoad("libc.so.6", out libcHandle);
+        }
+
+        if (libcHandle != IntPtr.Zero)
+        {
+            NativeLibrary.TryGetExport(libcHandle, "free", out s_freePtr);
+        }
+
+        return s_freePtr;
     }
 
     public static unsafe void Free(IntPtr ptr)
     {
         if (ptr == IntPtr.Zero) return;
-        s_free(ptr.ToPointer());
+        
+        var freePtr = GetFreePtr();
+        if (freePtr == IntPtr.Zero)
+            throw new InvalidOperationException("Could not find free() function in native library");
+        
+        // Call free through a function pointer
+        ((delegate* unmanaged[Cdecl]<IntPtr, void>)freePtr)(ptr);
     }
 
     // Structs

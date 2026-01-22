@@ -46,12 +46,19 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install zstd lz4 snappy
 
-      - name: Setup vcpkg (Windows)
+      - name: Setup MSYS2 (Windows)
         if: runner.os == 'Windows'
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git
-          .\vcpkg\bootstrap-vcpkg.bat
-          .\vcpkg\vcpkg install zstd:x64-windows lz4:x64-windows snappy:x64-windows pthreads:x64-windows
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-make
+            mingw-w64-x86_64-zstd
+            mingw-w64-x86_64-lz4
+            mingw-w64-x86_64-snappy
 
       - name: Configure and build TidesDB (Linux)
         if: runner.os == 'Linux'
@@ -74,24 +81,76 @@ jobs:
           cmake --build build --config Release
           sudo cmake --install build
 
+      - name: Create CMake config files for MSYS2 packages (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          MINGW_PREFIX_WIN=$(cygpath -m /mingw64)
+
+          mkdir -p /mingw64/lib/cmake/lz4
+          mkdir -p /mingw64/lib/cmake/zstd
+          mkdir -p /mingw64/lib/cmake/Snappy
+          mkdir -p /mingw64/lib/cmake/PThreads4W
+
+          cat > /mingw64/lib/cmake/lz4/lz4-config.cmake << EOF
+          if(NOT TARGET lz4::lz4)
+            add_library(lz4::lz4 SHARED IMPORTED)
+            set_target_properties(lz4::lz4 PROPERTIES
+              IMPORTED_LOCATION "${MINGW_PREFIX_WIN}/bin/liblz4.dll"
+              IMPORTED_IMPLIB "${MINGW_PREFIX_WIN}/lib/liblz4.dll.a"
+              INTERFACE_INCLUDE_DIRECTORIES "${MINGW_PREFIX_WIN}/include"
+            )
+          endif()
+          EOF
+
+          cat > /mingw64/lib/cmake/zstd/zstd-config.cmake << EOF
+          if(NOT TARGET zstd::libzstd_shared)
+            add_library(zstd::libzstd_shared SHARED IMPORTED)
+            set_target_properties(zstd::libzstd_shared PROPERTIES
+              IMPORTED_LOCATION "${MINGW_PREFIX_WIN}/bin/libzstd.dll"
+              IMPORTED_IMPLIB "${MINGW_PREFIX_WIN}/lib/libzstd.dll.a"
+              INTERFACE_INCLUDE_DIRECTORIES "${MINGW_PREFIX_WIN}/include"
+            )
+          endif()
+          EOF
+
+          cat > /mingw64/lib/cmake/Snappy/Snappy-config.cmake << EOF
+          if(NOT TARGET Snappy::snappy)
+            add_library(Snappy::snappy SHARED IMPORTED)
+            set_target_properties(Snappy::snappy PROPERTIES
+              IMPORTED_LOCATION "${MINGW_PREFIX_WIN}/bin/libsnappy.dll"
+              IMPORTED_IMPLIB "${MINGW_PREFIX_WIN}/lib/libsnappy.dll.a"
+              INTERFACE_INCLUDE_DIRECTORIES "${MINGW_PREFIX_WIN}/include"
+            )
+          endif()
+          EOF
+
+          cat > /mingw64/lib/cmake/PThreads4W/PThreads4W-config.cmake << EOF
+          if(NOT TARGET PThreads4W::PThreads4W)
+            add_library(PThreads4W::PThreads4W SHARED IMPORTED)
+            set_target_properties(PThreads4W::PThreads4W PROPERTIES
+              IMPORTED_LOCATION "${MINGW_PREFIX_WIN}/bin/libwinpthread-1.dll"
+              IMPORTED_IMPLIB "${MINGW_PREFIX_WIN}/lib/libpthread.dll.a"
+              INTERFACE_INCLUDE_DIRECTORIES "${MINGW_PREFIX_WIN}/include"
+            )
+          endif()
+          EOF
+
       - name: Configure and build TidesDB (Windows)
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: msys2 {0}
         run: |
           cd tidesdb
-          cmake -S . -B build `
-            -DCMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
-            -DBUILD_SHARED_LIBS=ON `
-            -DTIDESDB_WITH_SANITIZER=OFF `
-            -DTIDESDB_BUILD_TESTS=OFF `
-            -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON
+          cmake -G "MinGW Makefiles" \
+            -DCMAKE_MAKE_PROGRAM=mingw32-make \
+            -DCMAKE_PREFIX_PATH=/mingw64 \
+            -DBUILD_SHARED_LIBS=ON \
+            -DTIDESDB_WITH_SANITIZER=OFF \
+            -DTIDESDB_BUILD_TESTS=OFF \
+            -S . -B build
           cmake --build build --config Release
-          # Copy DLL and dependencies to a known location
-          New-Item -ItemType Directory -Force -Path "${{ github.workspace }}/tidesdb-bin"
-          Copy-Item build/Release/tidesdb.dll -Destination "${{ github.workspace }}/tidesdb-bin/" -Force
-          # Copy vcpkg dependency DLLs
-          Copy-Item "${{ github.workspace }}/vcpkg/installed/x64-windows/bin/*.dll" -Destination "${{ github.workspace }}/tidesdb-bin/" -Force
-          Get-ChildItem "${{ github.workspace }}/tidesdb-bin/"
+          cmake --install build --prefix /mingw64
+          cp build/libtidesdb.dll /mingw64/bin/
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -141,13 +200,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # Add MSYS2 MinGW bin to PATH so the DLLs can be found
+          $env:PATH = "$env:RUNNER_TEMP\msys64\mingw64\bin;$env:PATH"
           cd tidesdb-cs
-          # Copy native DLLs to test output directory (created by build step)
-          $testDir = "tests\TidesDB.Tests\bin\Debug\net8.0"
-          Write-Host "Test directory contents before copy:"
-          Get-ChildItem $testDir -ErrorAction SilentlyContinue
-          Copy-Item "${{ github.workspace }}\tidesdb-bin\*.dll" -Destination $testDir -Force
-          Write-Host "Test directory contents after copy:"
-          Get-ChildItem $testDir
-          # Run without --no-build to ensure all assemblies are properly resolved
           dotnet test --verbosity normal
