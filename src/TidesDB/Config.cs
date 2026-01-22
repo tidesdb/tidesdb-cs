@@ -120,7 +120,7 @@ public class ColumnFamilyConfig
 /// <summary>
 /// Statistics about a column family.
 /// </summary>
-public class Stats
+public record Stats
 {
     /// <summary>Number of LSM levels.</summary>
     public int NumLevels { get; init; }
