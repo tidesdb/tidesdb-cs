@@ -2,7 +2,7 @@
 
 tidesdb-cs is the official C# binding for TidesDB.
 
-TidesDB is a fast and efficient key-value storage engine library written in C. The underlying data structure is based on a log-structured merge-tree (LSM-tree). This C# binding provides a safe, idiomatic C# interface to TidesDB with full support for all features.
+TidesDB is a fast and efficient key-value storage engine library written in C. The underlying data structure is based on a log-structured merge-tree (LSM-tree). This C# binding provides a modern, type-safe interface to TidesDB with full support for all features.
 
 ## Features
 
@@ -16,7 +16,7 @@ TidesDB is a fast and efficient key-value storage engine library written in C. T
 - Savepoints for partial transaction rollback
 - Six built-in comparators plus custom registration
 
-For C# usage you can go to the TidesDB C# Reference [here](https://tidesdb.com/reference/cs/).
+For C# usage you can go to the TidesDB C# Reference [here](https://tidesdb.com/reference/csharp/).
 
 ## License
 
@@ -35,4 +35,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## Support
 
 - [Discord](https://discord.gg/tWEmjR66cy)
-- [GitHub Issues](https://github.com/tidesdb/tidesdb-rs/issues)
+- [GitHub Issues](https://github.com/tidesdb/tidesdb-cs/issues)

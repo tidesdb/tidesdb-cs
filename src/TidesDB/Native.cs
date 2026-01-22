@@ -16,6 +16,7 @@
 // limitations under the License.
 
 using System.Runtime.InteropServices;
+using System.Reflection;
 
 namespace TidesDB;
 
@@ -25,6 +26,47 @@ namespace TidesDB;
 internal static class Native
 {
     private const string LibraryName = "tidesdb";
+
+    static Native()
+    {
+        // Register a custom DLL resolver to help find the native library
+        NativeLibrary.SetDllImportResolver(typeof(Native).Assembly, DllImportResolver);
+    }
+
+    private static IntPtr DllImportResolver(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
+    {
+        if (libraryName != LibraryName)
+            return IntPtr.Zero;
+
+        IntPtr handle = IntPtr.Zero;
+
+        // Try loading with the default search path first
+        if (NativeLibrary.TryLoad(libraryName, assembly, searchPath, out handle))
+            return handle;
+
+        // On Windows, try different naming conventions
+        if (OperatingSystem.IsWindows())
+        {
+            // Try tidesdb.dll (MSVC style)
+            if (NativeLibrary.TryLoad("tidesdb.dll", assembly, searchPath, out handle))
+                return handle;
+            // Try libtidesdb.dll (MinGW style)
+            if (NativeLibrary.TryLoad("libtidesdb.dll", assembly, searchPath, out handle))
+                return handle;
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            if (NativeLibrary.TryLoad("libtidesdb.dylib", assembly, searchPath, out handle))
+                return handle;
+        }
+        else
+        {
+            if (NativeLibrary.TryLoad("libtidesdb.so", assembly, searchPath, out handle))
+                return handle;
+        }
+
+        return IntPtr.Zero;
+    }
 
     // Error codes
     public const int TDB_SUCCESS = 0;
@@ -46,148 +88,160 @@ internal static class Native
     public const int TDB_MAX_COMPARATOR_CTX = 256;
 
     // Database operations
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_open(ref tidesdb_config_t config, out IntPtr db);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_close(IntPtr db);
 
     // Default config
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern tidesdb_column_family_config_t tidesdb_default_column_family_config();
 
     // Column family operations
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_create_column_family(IntPtr db, 
         [MarshalAs(UnmanagedType.LPStr)] string name, 
         ref tidesdb_column_family_config_t config);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_drop_column_family(IntPtr db, 
         [MarshalAs(UnmanagedType.LPStr)] string name);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern IntPtr tidesdb_get_column_family(IntPtr db, 
         [MarshalAs(UnmanagedType.LPStr)] string name);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_list_column_families(IntPtr db, out IntPtr names, out int count);
 
     // Transaction operations
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_txn_begin(IntPtr db, out IntPtr txn);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_txn_begin_with_isolation(IntPtr db, int isolation, out IntPtr txn);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_txn_put(IntPtr txn, IntPtr cf, 
         IntPtr key, nuint keySize, 
         IntPtr value, nuint valueSize, 
         long ttl);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_txn_get(IntPtr txn, IntPtr cf, 
         IntPtr key, nuint keySize, 
         out IntPtr value, out nuint valueSize);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_txn_delete(IntPtr txn, IntPtr cf, 
         IntPtr key, nuint keySize);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_txn_commit(IntPtr txn);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_txn_rollback(IntPtr txn);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern void tidesdb_txn_free(IntPtr txn);
 
     // Savepoint operations
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_txn_savepoint(IntPtr txn, 
         [MarshalAs(UnmanagedType.LPStr)] string name);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_txn_rollback_to_savepoint(IntPtr txn, 
         [MarshalAs(UnmanagedType.LPStr)] string name);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_txn_release_savepoint(IntPtr txn, 
         [MarshalAs(UnmanagedType.LPStr)] string name);
 
     // Iterator operations
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_iter_new(IntPtr txn, IntPtr cf, out IntPtr iter);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_iter_seek(IntPtr iter, IntPtr key, nuint keySize);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_iter_seek_for_prev(IntPtr iter, IntPtr key, nuint keySize);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_iter_seek_to_first(IntPtr iter);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_iter_seek_to_last(IntPtr iter);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_iter_next(IntPtr iter);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_iter_prev(IntPtr iter);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_iter_valid(IntPtr iter);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_iter_key(IntPtr iter, out IntPtr key, out nuint keySize);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_iter_value(IntPtr iter, out IntPtr value, out nuint valueSize);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern void tidesdb_iter_free(IntPtr iter);
 
     // Maintenance operations
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_compact(IntPtr cf);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_flush_memtable(IntPtr cf);
 
     // Statistics operations
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_get_stats(IntPtr cf, out IntPtr stats);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern void tidesdb_free_stats(IntPtr stats);
 
-    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
+    [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
     public static extern int tidesdb_get_cache_stats(IntPtr db, ref tidesdb_cache_stats_t stats);
 
-    // Platform-specific C runtime free
-    // On Linux, use libc.so.6; on macOS, use libSystem.B.dylib; on Windows, use ucrtbase
-    [DllImport("libc.so.6", EntryPoint = "free", CallingConvention = CallingConvention.Cdecl)]
-    private static extern void linux_free(IntPtr ptr);
+    // Free function for memory allocated by native C code using malloc
+    // We use NativeLibrary to load the C runtime and call free() directly
+    // This ensures we use the same allocator that the native library uses
+    private static readonly unsafe delegate* unmanaged[Cdecl]<void*, void> s_free = GetFreeFunction();
 
-    [DllImport("libSystem.B.dylib", EntryPoint = "free", CallingConvention = CallingConvention.Cdecl)]
-    private static extern void macos_free(IntPtr ptr);
+    private static unsafe delegate* unmanaged[Cdecl]<void*, void> GetFreeFunction()
+    {
+        IntPtr libHandle;
+        if (OperatingSystem.IsWindows())
+        {
+            // On Windows, use ucrtbase.dll (Universal C Runtime)
+            libHandle = NativeLibrary.Load("ucrtbase.dll");
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            // On macOS, use libSystem.B.dylib
+            libHandle = NativeLibrary.Load("libSystem.B.dylib");
+        }
+        else
+        {
+            // On Linux, use libc.so.6
+            libHandle = NativeLibrary.Load("libc.so.6");
+        }
 
-    [DllImport("ucrtbase", EntryPoint = "free", CallingConvention = CallingConvention.Cdecl)]
-    private static extern void windows_free(IntPtr ptr);
+        var freePtr = NativeLibrary.GetExport(libHandle, "free");
+        return (delegate* unmanaged[Cdecl]<void*, void>)freePtr;
+    }
 
-    public static void Free(IntPtr ptr)
+    public static unsafe void Free(IntPtr ptr)
     {
         if (ptr == IntPtr.Zero) return;
-        if (OperatingSystem.IsWindows())
-            windows_free(ptr);
-        else if (OperatingSystem.IsMacOS())
-            macos_free(ptr);
-        else
-            linux_free(ptr);
+        s_free(ptr.ToPointer());
     }
 
     // Structs

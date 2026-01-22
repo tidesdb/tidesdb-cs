@@ -39,11 +39,11 @@ public enum CompressionAlgorithm
 /// </summary>
 public enum SyncMode
 {
-    /// <summary>No sync - fastest, least durable.</summary>
+    /// <summary>No sync -- fastest, least durable.</summary>
     None = 0,
-    /// <summary>Full sync - fsync on every write.</summary>
+    /// <summary>Full sync -- fsync on every write.</summary>
     Full = 1,
-    /// <summary>Interval sync - periodic background syncing.</summary>
+    /// <summary>Interval sync -- periodic background syncing.</summary>
     Interval = 2
 }
 
@@ -52,17 +52,17 @@ public enum SyncMode
 /// </summary>
 public enum LogLevel
 {
-    /// <summary>Debug level - detailed diagnostic information.</summary>
+    /// <summary>Debug level -- detailed diagnostic information.</summary>
     Debug = 0,
-    /// <summary>Info level - general informational messages.</summary>
+    /// <summary>Info level -- general informational messages.</summary>
     Info = 1,
-    /// <summary>Warn level - warning messages.</summary>
+    /// <summary>Warn level -- warning messages.</summary>
     Warn = 2,
-    /// <summary>Error level - error messages.</summary>
+    /// <summary>Error level -- error messages.</summary>
     Error = 3,
-    /// <summary>Fatal level - critical errors.</summary>
+    /// <summary>Fatal level -- critical errors.</summary>
     Fatal = 4,
-    /// <summary>None - disable all logging.</summary>
+    /// <summary>None -- disable all logging.</summary>
     None = 99
 }
 
@@ -71,15 +71,15 @@ public enum LogLevel
 /// </summary>
 public enum IsolationLevel
 {
-    /// <summary>Read uncommitted - sees all data including uncommitted changes.</summary>
+    /// <summary>Read uncommitted -- sees all data including uncommitted changes.</summary>
     ReadUncommitted = 0,
-    /// <summary>Read committed - sees only committed data (default).</summary>
+    /// <summary>Read committed -- sees only committed data (default).</summary>
     ReadCommitted = 1,
-    /// <summary>Repeatable read - consistent snapshot, phantom reads possible.</summary>
+    /// <summary>Repeatable read -- consistent snapshot, phantom reads possible.</summary>
     RepeatableRead = 2,
-    /// <summary>Snapshot isolation - write-write conflict detection.</summary>
+    /// <summary>Snapshot isolation -- write-write conflict detection.</summary>
     Snapshot = 3,
-    /// <summary>Serializable - full read-write conflict detection (SSI).</summary>
+    /// <summary>Serializable -- full read-write conflict detection (SSI).</summary>
     Serializable = 4
 }
 

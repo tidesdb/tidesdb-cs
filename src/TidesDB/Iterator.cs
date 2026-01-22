@@ -95,7 +95,7 @@ public class Iterator : IDisposable
 
     /// <summary>
     /// Moves the iterator to the next entry.
-    /// Does not throw if already at end - use IsValid() to check.
+    /// Does not throw if already at end -- use IsValid() to check.
     /// </summary>
     public void Next()
     {
@@ -109,7 +109,7 @@ public class Iterator : IDisposable
 
     /// <summary>
     /// Moves the iterator to the previous entry.
-    /// Does not throw if already at beginning - use IsValid() to check.
+    /// Does not throw if already at beginning -- use IsValid() to check.
     /// </summary>
     public void Prev()
     {

@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 namespace TidesDB;
 
 /// <summary>
-/// Represents a TidesDB column family - an isolated key-value store with independent configuration.
+/// a TidesDB column family -- an isolated key-value store with independent configuration.
 /// </summary>
 public class ColumnFamily
 {
