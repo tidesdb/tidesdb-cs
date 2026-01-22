@@ -147,12 +147,16 @@ jobs:
             -DBUILD_SHARED_LIBS=ON \
             -DTIDESDB_WITH_SANITIZER=OFF \
             -DTIDESDB_BUILD_TESTS=OFF \
-            -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--export-all-symbols" \
+            -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON \
             -S . -B build
           cmake --build build --config Release
           cmake --install build --prefix /mingw64
-          cp build/libtidesdb.dll /mingw64/bin/ 2>/dev/null || true
-          cp build/libtidesdb.dll /mingw64/bin/tidesdb.dll 2>/dev/null || true
+          # Copy DLL to bin and also create tidesdb.dll for .NET P/Invoke
+          cp build/libtidesdb.dll /mingw64/bin/libtidesdb.dll
+          cp build/libtidesdb.dll /mingw64/bin/tidesdb.dll
+          # Verify the DLL exists and show exported symbols
+          ls -la /mingw64/bin/*.dll | grep tidesdb || echo "DLL not found!"
+          objdump -p /mingw64/bin/libtidesdb.dll | grep -A 50 "Export Table" | head -60 || echo "No export table"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
