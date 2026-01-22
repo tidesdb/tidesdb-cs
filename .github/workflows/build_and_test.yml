@@ -207,14 +207,17 @@ jobs:
         shell: pwsh
         run: |
           $env:PATH = "D:\a\_temp\msys64\mingw64\bin;C:\msys64\mingw64\bin;$env:PATH"
-          # Copy native DLLs to test output directory for runtime discovery
-          $testDir = "tidesdb-cs\tests\TidesDB.Tests\bin\Release\net8.0"
+          # Use absolute path for test directory
+          $testDir = "D:\a\tidesdb-cs\tidesdb-cs\tidesdb-cs\tests\TidesDB.Tests\bin\Release\net8.0"
+          Write-Host "Test directory: $testDir"
+          Write-Host "Test directory exists: $(Test-Path $testDir)"
+          
           if (Test-Path $testDir) {
-            # Copy tidesdb DLL
-            Copy-Item "D:\a\_temp\msys64\mingw64\bin\libtidesdb.dll" "$testDir\tidesdb.dll" -Force
-            Copy-Item "D:\a\_temp\msys64\mingw64\bin\libtidesdb.dll" "$testDir\libtidesdb.dll" -Force
-            # Copy dependency DLLs that tidesdb needs
             $mingwBin = "D:\a\_temp\msys64\mingw64\bin"
+            # Copy tidesdb DLL with the name P/Invoke expects
+            Copy-Item "$mingwBin\libtidesdb.dll" "$testDir\tidesdb.dll" -Force
+            Write-Host "Copied libtidesdb.dll as tidesdb.dll"
+            # Copy dependency DLLs that tidesdb needs
             $deps = @("libzstd.dll", "liblz4.dll", "libsnappy.dll", "libwinpthread-1.dll", "libgcc_s_seh-1.dll", "libstdc++-6.dll")
             foreach ($dep in $deps) {
               $src = Join-Path $mingwBin $dep
@@ -223,8 +226,11 @@ jobs:
                 Write-Host "Copied $dep"
               }
             }
-            Write-Host "=== DLLs in test directory ==="
+            Write-Host "=== DLLs in test directory BEFORE test ==="
             Get-ChildItem "$testDir\*.dll" | Select-Object Name
+          } else {
+            Write-Host "ERROR: Test directory does not exist!"
+            exit 1
           }
           cd tidesdb-cs
           dotnet test --configuration Release --no-build --verbosity normal
