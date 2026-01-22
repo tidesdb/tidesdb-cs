@@ -168,6 +168,27 @@ internal static class Native
     [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
     public static extern int tidesdb_get_cache_stats(IntPtr db, ref tidesdb_cache_stats_t stats);
 
+    // C runtime free function - cross-platform
+    [DllImport("libc", EntryPoint = "free", CallingConvention = CallingConvention.Cdecl)]
+    private static extern void free_libc(IntPtr ptr);
+
+    [DllImport("msvcrt", EntryPoint = "free", CallingConvention = CallingConvention.Cdecl)]
+    private static extern void free_msvcrt(IntPtr ptr);
+
+    public static void Free(IntPtr ptr)
+    {
+        if (ptr == IntPtr.Zero) return;
+        
+        if (OperatingSystem.IsWindows())
+        {
+            free_msvcrt(ptr);
+        }
+        else
+        {
+            free_libc(ptr);
+        }
+    }
+
     // Structs
     [StructLayout(LayoutKind.Sequential)]
     public struct tidesdb_config_t

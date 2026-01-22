@@ -78,7 +78,7 @@ public class Transaction : IDisposable
 
                 var value = new byte[(int)valueSize];
                 Marshal.Copy(valuePtr, value, 0, (int)valueSize);
-                Marshal.FreeHGlobal(valuePtr);
+                Native.Free(valuePtr);
                 return value;
             }
         }

@@ -142,13 +142,13 @@ public class TidesDB : IDisposable
             {
                 var strPtr = Marshal.ReadIntPtr(namesPtr, i * IntPtr.Size);
                 names[i] = Marshal.PtrToStringAnsi(strPtr) ?? "";
-                Marshal.FreeHGlobal(strPtr);
+                Native.Free(strPtr);
             }
             return names;
         }
         finally
         {
-            Marshal.FreeHGlobal(namesPtr);
+            Native.Free(namesPtr);
         }
     }
 

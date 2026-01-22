@@ -64,7 +64,11 @@ public class ColumnFamily
                 {
                     for (int i = 0; i < nativeStats.num_levels; i++)
                     {
-                        levelSizes[i] = (ulong)Marshal.ReadIntPtr(nativeStats.level_sizes, i * IntPtr.Size);
+                        // size_t is nuint (platform-dependent size)
+                        if (IntPtr.Size == 8)
+                            levelSizes[i] = (ulong)Marshal.ReadInt64(nativeStats.level_sizes, i * sizeof(long));
+                        else
+                            levelSizes[i] = (ulong)Marshal.ReadInt32(nativeStats.level_sizes, i * sizeof(int));
                     }
                 }
 
