@@ -148,9 +148,17 @@ jobs:
             -DTIDESDB_WITH_SANITIZER=OFF \
             -DTIDESDB_BUILD_TESTS=OFF \
             -DBUILD_SHARED_LIBS=ON \
+            -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON \
             -S . -B build
           cmake --build build --config Release
           cmake --install build --prefix /mingw64
+          # Copy the DLL to bin directory for runtime discovery
+          cp build/libtidesdb.dll /mingw64/bin/
+          # Also copy as tidesdb.dll for P/Invoke discovery
+          cp build/libtidesdb.dll /mingw64/bin/tidesdb.dll
+          # Verify the DLL has the expected exports
+          echo "=== Verifying DLL exports ==="
+          objdump -p build/libtidesdb.dll | grep -E "tidesdb_open|tidesdb_close" || echo "Warning: Expected exports not found"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -183,10 +191,29 @@ jobs:
           export DYLD_LIBRARY_PATH=/usr/local/lib:$DYLD_LIBRARY_PATH
           dotnet test --configuration Release --no-build --verbosity normal
 
+      - name: Verify TidesDB DLL (Windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          echo "=== Checking DLL locations ==="
+          ls -la /mingw64/bin/libtidesdb* || echo "No libtidesdb in bin"
+          ls -la /mingw64/bin/tidesdb* || echo "No tidesdb in bin"
+          ls -la /mingw64/lib/libtidesdb* || echo "No libtidesdb in lib"
+          echo "=== Checking DLL exports ==="
+          objdump -p /mingw64/bin/libtidesdb.dll | grep -A 50 "Export Table" || echo "Could not read exports"
+
       - name: Test (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $env:PATH = "D:\a\_temp\msys64\mingw64\bin;C:\msys64\mingw64\bin;$env:PATH"
+          # Also copy DLL to test output directory for runtime discovery
+          $testDir = "tidesdb-cs\tests\TidesDB.Tests\bin\Release\net8.0"
+          if (Test-Path $testDir) {
+            Copy-Item "D:\a\_temp\msys64\mingw64\bin\libtidesdb.dll" "$testDir\tidesdb.dll" -Force
+            Copy-Item "D:\a\_temp\msys64\mingw64\bin\libtidesdb.dll" "$testDir\libtidesdb.dll" -Force
+            Write-Host "Copied DLLs to test directory"
+            Get-ChildItem "$testDir\*.dll" | Select-Object Name
+          }
           cd tidesdb-cs
           dotnet test --configuration Release --no-build --verbosity normal
