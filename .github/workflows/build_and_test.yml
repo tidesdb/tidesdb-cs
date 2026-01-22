@@ -207,12 +207,23 @@ jobs:
         shell: pwsh
         run: |
           $env:PATH = "D:\a\_temp\msys64\mingw64\bin;C:\msys64\mingw64\bin;$env:PATH"
-          # Also copy DLL to test output directory for runtime discovery
+          # Copy native DLLs to test output directory for runtime discovery
           $testDir = "tidesdb-cs\tests\TidesDB.Tests\bin\Release\net8.0"
           if (Test-Path $testDir) {
+            # Copy tidesdb DLL
             Copy-Item "D:\a\_temp\msys64\mingw64\bin\libtidesdb.dll" "$testDir\tidesdb.dll" -Force
             Copy-Item "D:\a\_temp\msys64\mingw64\bin\libtidesdb.dll" "$testDir\libtidesdb.dll" -Force
-            Write-Host "Copied DLLs to test directory"
+            # Copy dependency DLLs that tidesdb needs
+            $mingwBin = "D:\a\_temp\msys64\mingw64\bin"
+            $deps = @("libzstd.dll", "liblz4.dll", "libsnappy.dll", "libwinpthread-1.dll", "libgcc_s_seh-1.dll", "libstdc++-6.dll")
+            foreach ($dep in $deps) {
+              $src = Join-Path $mingwBin $dep
+              if (Test-Path $src) {
+                Copy-Item $src $testDir -Force
+                Write-Host "Copied $dep"
+              }
+            }
+            Write-Host "=== DLLs in test directory ==="
             Get-ChildItem "$testDir\*.dll" | Select-Object Name
           }
           cd tidesdb-cs
