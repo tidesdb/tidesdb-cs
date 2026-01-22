@@ -229,73 +229,18 @@ internal static class Native
     public static extern int tidesdb_get_cache_stats(IntPtr db, ref tidesdb_cache_stats_t stats);
 
     // Free function for memory allocated by native C code using malloc
-    // Since TidesDB is linked against libc, we can get the free symbol from the TidesDB library itself
-    // This ensures we use the exact same allocator that TidesDB uses
-    private static IntPtr s_freePtr = IntPtr.Zero;
-
-    private static IntPtr GetFreePtr()
+    // TidesDB allocates memory with malloc() and expects the caller to free it with free()
+    // NativeMemory.Free is a thin wrapper over the C free() API (per Microsoft docs)
+    // This works cross-platform and uses the same C runtime as the native library
+    public static void Free(IntPtr ptr)
     {
-        if (s_freePtr != IntPtr.Zero)
-            return s_freePtr;
-
-        // Try to get free from the TidesDB library first (it's linked against libc)
-        IntPtr tidesdbHandle = IntPtr.Zero;
-        if (OperatingSystem.IsWindows())
+        if (ptr != IntPtr.Zero)
         {
-            NativeLibrary.TryLoad("tidesdb", typeof(Native).Assembly, null, out tidesdbHandle);
+            unsafe
+            {
+                NativeMemory.Free((void*)ptr);
+            }
         }
-        else if (OperatingSystem.IsMacOS())
-        {
-            NativeLibrary.TryLoad("libtidesdb.dylib", typeof(Native).Assembly, null, out tidesdbHandle);
-        }
-        else
-        {
-            NativeLibrary.TryLoad("libtidesdb.so", typeof(Native).Assembly, null, out tidesdbHandle);
-        }
-
-        // Try to get free from the loaded TidesDB library (it re-exports libc symbols on most platforms)
-        if (tidesdbHandle != IntPtr.Zero && NativeLibrary.TryGetExport(tidesdbHandle, "free", out var freePtr))
-        {
-            s_freePtr = freePtr;
-            return s_freePtr;
-        }
-
-        // Fallback: load libc directly
-        IntPtr libcHandle = IntPtr.Zero;
-        if (OperatingSystem.IsWindows())
-        {
-            if (!NativeLibrary.TryLoad("ucrtbase", out libcHandle))
-                NativeLibrary.TryLoad("msvcrt", out libcHandle);
-        }
-        else if (OperatingSystem.IsMacOS())
-        {
-            NativeLibrary.TryLoad("libSystem.B.dylib", out libcHandle);
-        }
-        else
-        {
-            // On Linux, try without version first, then with version
-            if (!NativeLibrary.TryLoad("libc", out libcHandle))
-                NativeLibrary.TryLoad("libc.so.6", out libcHandle);
-        }
-
-        if (libcHandle != IntPtr.Zero)
-        {
-            NativeLibrary.TryGetExport(libcHandle, "free", out s_freePtr);
-        }
-
-        return s_freePtr;
-    }
-
-    public static unsafe void Free(IntPtr ptr)
-    {
-        if (ptr == IntPtr.Zero) return;
-        
-        var freePtr = GetFreePtr();
-        if (freePtr == IntPtr.Zero)
-            throw new InvalidOperationException("Could not find free() function in native library");
-        
-        // Call free through a function pointer
-        ((delegate* unmanaged[Cdecl]<IntPtr, void>)freePtr)(ptr);
     }
 
     // Structs
@@ -306,6 +251,7 @@ internal static class Native
         public int num_flush_threads;
         public int num_compaction_threads;
         public int log_level;
+        private int _padding; // Padding to align block_cache_size to 8-byte boundary
         public nuint block_cache_size;
         public nuint max_open_sstables;
     }
@@ -333,6 +279,7 @@ internal static class Native
         public int skip_list_max_level;
         public float skip_list_probability;
         public int default_isolation_level;
+        private int _padding; // Padding to align min_disk_space to 8-byte boundary
         public ulong min_disk_space;
         public int l1_file_count_trigger;
         public int l0_queue_stall_threshold;
@@ -342,6 +289,7 @@ internal static class Native
     public struct tidesdb_stats_t
     {
         public int num_levels;
+        private int _padding; // Padding to align memtable_size to 8-byte boundary
         public nuint memtable_size;
         public IntPtr level_sizes;
         public IntPtr level_num_sstables;
@@ -352,6 +300,7 @@ internal static class Native
     public struct tidesdb_cache_stats_t
     {
         public int enabled;
+        private int _padding; // Padding to align total_entries to 8-byte boundary
         public nuint total_entries;
         public nuint total_bytes;
         public ulong hits;
