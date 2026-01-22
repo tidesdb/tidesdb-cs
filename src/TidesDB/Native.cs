@@ -168,10 +168,21 @@ internal static class Native
     [DllImport(LibraryName, CallingConvention = CallingConvention.Cdecl)]
     public static extern int tidesdb_get_cache_stats(IntPtr db, ref tidesdb_cache_stats_t stats);
 
-    public static unsafe void Free(IntPtr ptr)
+    // Platform-specific C runtime free
+    // On Linux, use libc; on macOS, use libSystem; on Windows, use ucrtbase (Universal CRT)
+    [DllImport("libc", EntryPoint = "free", CallingConvention = CallingConvention.Cdecl)]
+    private static extern void libc_free(IntPtr ptr);
+
+    [DllImport("ucrtbase", EntryPoint = "free", CallingConvention = CallingConvention.Cdecl)]
+    private static extern void ucrt_free(IntPtr ptr);
+
+    public static void Free(IntPtr ptr)
     {
         if (ptr == IntPtr.Zero) return;
-        System.Runtime.InteropServices.NativeMemory.Free((void*)ptr);
+        if (OperatingSystem.IsWindows())
+            ucrt_free(ptr);
+        else
+            libc_free(ptr);
     }
 
     // Structs

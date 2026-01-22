@@ -142,8 +142,11 @@ jobs:
         shell: pwsh
         run: |
           cd tidesdb-cs
-          # Copy native DLLs to test output directory
+          # Ensure test output directory exists and copy native DLLs
           $testDir = "tests\TidesDB.Tests\bin\Debug\net8.0"
+          if (-not (Test-Path $testDir)) {
+            New-Item -ItemType Directory -Force -Path $testDir | Out-Null
+          }
           Copy-Item "${{ github.workspace }}\tidesdb-bin\*.dll" -Destination $testDir -Force
           Get-ChildItem $testDir
           dotnet test --no-build --verbosity normal
