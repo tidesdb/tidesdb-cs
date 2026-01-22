@@ -216,91 +216,71 @@ jobs:
           Write-Host "=== Current directory: $(Get-Location) ==="
           Write-Host "=== RUNNER_TEMP: $env:RUNNER_TEMP ==="
           
-          # Find MSYS2 mingw64 bin directory - check multiple possible locations
-          $msys2Paths = @(
-            "$env:RUNNER_TEMP\msys64\mingw64\bin",
-            "D:\a\_temp\msys64\mingw64\bin",
-            "C:\msys64\mingw64\bin"
-          )
+          # Find MSYS2 mingw64 bin directory
+          $msys2Bin = "$env:RUNNER_TEMP\msys64\mingw64\bin"
+          if (-not (Test-Path $msys2Bin)) {
+            $msys2Bin = "D:\a\_temp\msys64\mingw64\bin"
+          }
+          Write-Host "MSYS2 bin: $msys2Bin"
           
-          # Also check the tidesdb build directory (absolute path)
+          # Find libtidesdb.dll - check MSYS2 bin first, then build directory
           $tidesdbBuildDir = "D:\a\tidesdb-cs\tidesdb-cs\tidesdb\build"
+          $libtidesdbPath = $null
           
-          $mingwBin = $null
-          
-          # First check MSYS2 paths
-          foreach ($path in $msys2Paths) {
-            Write-Host "Checking MSYS2 path: $path"
-            if (Test-Path "$path\libtidesdb.dll") {
-              $mingwBin = $path
-              Write-Host "Found libtidesdb.dll in MSYS2: $mingwBin"
-              break
-            }
-          }
-          
-          # If not found in MSYS2, check tidesdb build directory
-          if (-not $mingwBin) {
-            Write-Host "Checking tidesdb build directory: $tidesdbBuildDir"
-            if (Test-Path "$tidesdbBuildDir\libtidesdb.dll") {
-              $mingwBin = $tidesdbBuildDir
-              Write-Host "Found libtidesdb.dll in build directory: $mingwBin"
-            }
-          }
-          
-          if (-not $mingwBin) {
+          if (Test-Path "$msys2Bin\libtidesdb.dll") {
+            $libtidesdbPath = "$msys2Bin\libtidesdb.dll"
+            Write-Host "Found libtidesdb.dll in MSYS2 bin"
+          } elseif (Test-Path "$tidesdbBuildDir\libtidesdb.dll") {
+            $libtidesdbPath = "$tidesdbBuildDir\libtidesdb.dll"
+            Write-Host "Found libtidesdb.dll in build directory"
+          } else {
             Write-Host "ERROR: Could not find libtidesdb.dll!"
-            Write-Host "Searching entire D:\a for libtidesdb.dll..."
+            Write-Host "Searching for libtidesdb.dll..."
             Get-ChildItem -Path "D:\a" -Recurse -Filter "libtidesdb.dll" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "Found: $($_.FullName)" }
-            Write-Host "Searching RUNNER_TEMP for libtidesdb.dll..."
-            Get-ChildItem -Path "$env:RUNNER_TEMP" -Recurse -Filter "libtidesdb.dll" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "Found: $($_.FullName)" }
             exit 1
           }
           
-          # Find the mingw bin for dependencies
-          $depBin = $msys2Paths | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $depBin) { $depBin = $mingwBin }
-          Write-Host "Using dependency bin: $depBin"
+          # Add MSYS2 bin to PATH so the NativeLibraryResolver can find dependencies
+          $env:PATH = "$msys2Bin;$env:PATH"
+          Write-Host "Updated PATH to include MSYS2 bin"
           
-          $env:PATH = "$mingwBin;$depBin;$env:PATH"
-          
-          # Use absolute path for test directory
+          # Get test output directory
           $testDir = "D:\a\tidesdb-cs\tidesdb-cs\tidesdb-cs\tests\TidesDB.Tests\bin\Release\net8.0"
           Write-Host "Test directory: $testDir"
-          Write-Host "Test directory exists: $(Test-Path $testDir)"
           
           if (-not (Test-Path $testDir)) {
-            Write-Host "ERROR: Test directory does not exist! Listing parent..."
-            Get-ChildItem "D:\a\tidesdb-cs\tidesdb-cs\tidesdb-cs\tests\TidesDB.Tests\bin\Release\" -ErrorAction SilentlyContinue
+            Write-Host "ERROR: Test directory does not exist!"
             exit 1
           }
           
-          # Copy tidesdb DLL with the name P/Invoke expects
-          $srcDll = Join-Path $mingwBin "libtidesdb.dll"
-          $dstDll = Join-Path $testDir "tidesdb.dll"
-          Write-Host "Copying $srcDll to $dstDll"
-          Copy-Item $srcDll $dstDll -Force -ErrorAction Stop
-          Write-Host "SUCCESS: Copied libtidesdb.dll as tidesdb.dll"
+          # Copy libtidesdb.dll to test directory with both names
+          Copy-Item $libtidesdbPath "$testDir\libtidesdb.dll" -Force
+          Copy-Item $libtidesdbPath "$testDir\tidesdb.dll" -Force
+          Write-Host "Copied libtidesdb.dll to test directory (as both libtidesdb.dll and tidesdb.dll)"
           
-          # Copy dependency DLLs that tidesdb needs
-          $deps = @("libzstd.dll", "liblz4.dll", "libsnappy.dll", "libwinpthread-1.dll", "libgcc_s_seh-1.dll", "libstdc++-6.dll")
+          # Copy all required dependency DLLs to test directory
+          $deps = @(
+            "libzstd.dll",
+            "liblz4.dll", 
+            "libsnappy.dll",
+            "libwinpthread-1.dll",
+            "libgcc_s_seh-1.dll",
+            "libstdc++-6.dll"
+          )
+          
           foreach ($dep in $deps) {
-            $src = Join-Path $depBin $dep
+            $src = "$msys2Bin\$dep"
             if (Test-Path $src) {
               Copy-Item $src $testDir -Force
               Write-Host "Copied $dep"
             } else {
-              Write-Host "WARNING: $dep not found at $src"
+              Write-Host "WARNING: $dep not found"
             }
           }
           
           Write-Host "=== DLLs in test directory ==="
           Get-ChildItem "$testDir\*.dll" | ForEach-Object { Write-Host $_.Name }
           
-          # Verify tidesdb.dll exists
-          if (-not (Test-Path "$testDir\tidesdb.dll")) {
-            Write-Host "ERROR: tidesdb.dll was not copied to test directory!"
-            exit 1
-          }
-          
+          # Run tests
           cd tidesdb-cs
           dotnet test --configuration Release --no-build --verbosity normal

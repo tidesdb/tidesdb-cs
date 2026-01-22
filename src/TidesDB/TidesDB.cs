@@ -29,6 +29,12 @@ public sealed class TidesDb : IDisposable
     private bool _disposed;
     private nint _dbPathPtr;
 
+    static TidesDb()
+    {
+        // Initialize the native library resolver before any P/Invoke calls
+        NativeLibraryResolver.Initialize();
+    }
+
     private TidesDb(nint handle, nint dbPathPtr)
     {
         _handle = handle;
