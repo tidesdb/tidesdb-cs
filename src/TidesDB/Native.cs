@@ -40,28 +40,46 @@ internal static class Native
 
         IntPtr handle = IntPtr.Zero;
 
-        // Try loading with the default search path first
-        if (NativeLibrary.TryLoad(libraryName, assembly, searchPath, out handle))
-            return handle;
-
-        // On Windows, try different naming conventions
+        // On Windows, try MinGW naming first (libtidesdb.dll), then MSVC naming (tidesdb.dll)
         if (OperatingSystem.IsWindows())
         {
+            // Try libtidesdb.dll (MinGW style) - this is what MSYS2 builds produce
+            if (NativeLibrary.TryLoad("libtidesdb.dll", assembly, searchPath, out handle))
+                return handle;
+            // Try without assembly context to search PATH
+            if (NativeLibrary.TryLoad("libtidesdb.dll", out handle))
+                return handle;
+            // Try libtidesdb without extension
+            if (NativeLibrary.TryLoad("libtidesdb", assembly, searchPath, out handle))
+                return handle;
+            if (NativeLibrary.TryLoad("libtidesdb", out handle))
+                return handle;
             // Try tidesdb.dll (MSVC style)
             if (NativeLibrary.TryLoad("tidesdb.dll", assembly, searchPath, out handle))
                 return handle;
-            // Try libtidesdb.dll (MinGW style)
-            if (NativeLibrary.TryLoad("libtidesdb.dll", assembly, searchPath, out handle))
+            if (NativeLibrary.TryLoad("tidesdb.dll", out handle))
+                return handle;
+            // Try default name
+            if (NativeLibrary.TryLoad(libraryName, assembly, searchPath, out handle))
                 return handle;
         }
         else if (OperatingSystem.IsMacOS())
         {
             if (NativeLibrary.TryLoad("libtidesdb.dylib", assembly, searchPath, out handle))
                 return handle;
+            if (NativeLibrary.TryLoad("libtidesdb.dylib", out handle))
+                return handle;
+            if (NativeLibrary.TryLoad(libraryName, assembly, searchPath, out handle))
+                return handle;
         }
         else
         {
+            // Linux
             if (NativeLibrary.TryLoad("libtidesdb.so", assembly, searchPath, out handle))
+                return handle;
+            if (NativeLibrary.TryLoad("libtidesdb.so", out handle))
+                return handle;
+            if (NativeLibrary.TryLoad(libraryName, assembly, searchPath, out handle))
                 return handle;
         }
 
