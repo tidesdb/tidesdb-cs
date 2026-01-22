@@ -64,7 +64,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cd tidesdb
-          cmake -S . -B build -DTIDESDB_BUILD_TESTS=OFF -DTIDESDB_WITH_SANITIZER=OFF
+          cmake -S . -B build -DTIDESDB_BUILD_TESTS=OFF -DTIDESDB_WITH_SANITIZER=OFF -DBUILD_SHARED_LIBS=ON
           cmake --build build --config Release
           sudo cmake --install build
           sudo ldconfig
@@ -77,6 +77,7 @@ jobs:
           cmake -S . -B build \
             -DTIDESDB_BUILD_TESTS=OFF \
             -DTIDESDB_WITH_SANITIZER=OFF \
+            -DBUILD_SHARED_LIBS=ON \
             -DCMAKE_PREFIX_PATH="${HOMEBREW_PREFIX}"
           cmake --build build --config Release
           sudo cmake --install build
@@ -146,6 +147,7 @@ jobs:
             -DCMAKE_PREFIX_PATH=/mingw64 \
             -DTIDESDB_WITH_SANITIZER=OFF \
             -DTIDESDB_BUILD_TESTS=OFF \
+            -DBUILD_SHARED_LIBS=ON \
             -S . -B build
           cmake --build build --config Release
           cmake --install build --prefix /mingw64
@@ -185,6 +187,6 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $env:PATH = "C:\msys64\mingw64\bin;$env:PATH"
+          $env:PATH = "D:\a\_temp\msys64\mingw64\bin;C:\msys64\mingw64\bin;$env:PATH"
           cd tidesdb-cs
           dotnet test --configuration Release --no-build --verbosity normal
