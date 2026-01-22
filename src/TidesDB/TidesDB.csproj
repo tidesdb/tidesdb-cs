@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    
+    <!-- Package metadata -->
+    <PackageId>TidesDB</PackageId>
+    <Version>0.2.0</Version>
+    <Authors>TidesDB</Authors>
+    <Company>TidesDB</Company>
+    <Description>C# bindings for TidesDB - A high-performance embedded key-value storage engine</Description>
+    <PackageTags>database;key-value;storage;embedded;lsm-tree;tidesdb</PackageTags>
+    <PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/tidesdb/tidesdb-cs</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/tidesdb/tidesdb-cs</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>
