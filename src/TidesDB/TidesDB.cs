@@ -31,8 +31,16 @@ public sealed class TidesDb : IDisposable
 
     static TidesDb()
     {
-        // Initialize the native library resolver before any P/Invoke calls
-        NativeLibraryResolver.Initialize();
+        try
+        {
+            // Initialize the native library resolver before any P/Invoke calls
+            NativeLibraryResolver.Initialize();
+        }
+        catch
+        {
+            // Silently ignore initialization failures
+            // Native library loading will use default resolution
+        }
     }
 
     private TidesDb(nint handle, nint dbPathPtr)

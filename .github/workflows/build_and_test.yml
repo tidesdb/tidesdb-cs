@@ -52,6 +52,7 @@ jobs:
         with:
           msystem: MINGW64
           update: true
+          cache: false
           install: >-
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-cmake
@@ -212,7 +213,11 @@ jobs:
       - name: Test (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
+        env:
+          CI: "true"
+          TIDESDB_DEBUG: "1"
         run: |
+          Write-Host "=== TidesDB Windows Test - Build $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') ==="
           Write-Host "=== Current directory: $(Get-Location) ==="
           Write-Host "=== RUNNER_TEMP: $env:RUNNER_TEMP ==="
           
@@ -244,19 +249,29 @@ jobs:
           $env:PATH = "$msys2Bin;$env:PATH"
           Write-Host "Updated PATH to include MSYS2 bin"
           
-          # Get test output directory
+          # Get test output directories - check both TidesDB.Tests and TidesDB
           $testDir = "D:\a\tidesdb-cs\tidesdb-cs\tidesdb-cs\tests\TidesDB.Tests\bin\Release\net8.0"
+          $libDir = "D:\a\tidesdb-cs\tidesdb-cs\tidesdb-cs\src\TidesDB\bin\Release\net8.0"
           Write-Host "Test directory: $testDir"
+          Write-Host "Library directory: $libDir"
           
           if (-not (Test-Path $testDir)) {
             Write-Host "ERROR: Test directory does not exist!"
+            Write-Host "Listing available directories..."
+            Get-ChildItem "D:\a\tidesdb-cs\tidesdb-cs\tidesdb-cs" -Recurse -Directory | Where-Object { $_.Name -eq "net8.0" } | ForEach-Object { Write-Host $_.FullName }
             exit 1
           }
           
-          # Copy libtidesdb.dll to test directory with both names
+          # Copy libtidesdb.dll to BOTH test directory AND library directory
           Copy-Item $libtidesdbPath "$testDir\libtidesdb.dll" -Force
           Copy-Item $libtidesdbPath "$testDir\tidesdb.dll" -Force
           Write-Host "Copied libtidesdb.dll to test directory (as both libtidesdb.dll and tidesdb.dll)"
+          
+          if (Test-Path $libDir) {
+            Copy-Item $libtidesdbPath "$libDir\libtidesdb.dll" -Force
+            Copy-Item $libtidesdbPath "$libDir\tidesdb.dll" -Force
+            Write-Host "Copied libtidesdb.dll to library directory as well"
+          }
           
           # Copy all required dependency DLLs to test directory
           $deps = @(
@@ -272,6 +287,9 @@ jobs:
             $src = "$msys2Bin\$dep"
             if (Test-Path $src) {
               Copy-Item $src $testDir -Force
+              if (Test-Path $libDir) {
+                Copy-Item $src $libDir -Force
+              }
               Write-Host "Copied $dep"
             } else {
               Write-Host "WARNING: $dep not found"
@@ -281,6 +299,17 @@ jobs:
           Write-Host "=== DLLs in test directory ==="
           Get-ChildItem "$testDir\*.dll" | ForEach-Object { Write-Host $_.Name }
           
-          # Run tests
+          Write-Host "=== Checking NativeLibraryResolver.cs exists in source ==="
+          $resolverPath = "D:\a\tidesdb-cs\tidesdb-cs\tidesdb-cs\src\TidesDB\Native\NativeLibraryResolver.cs"
+          if (Test-Path $resolverPath) {
+            Write-Host "NativeLibraryResolver.cs EXISTS - this is the updated code"
+            Write-Host "First 50 lines:"
+            Get-Content $resolverPath -Head 50
+          } else {
+            Write-Host "WARNING: NativeLibraryResolver.cs NOT FOUND - old code may be running!"
+          }
+          
+          # Run tests with detailed output
+          Write-Host "=== Running tests ==="
           cd tidesdb-cs
-          dotnet test --configuration Release --no-build --verbosity normal
+          dotnet test --configuration Release --no-build --verbosity detailed

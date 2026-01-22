@@ -27,6 +27,17 @@ internal static class NativeLibraryResolver
     private const string LibraryName = "tidesdb";
     private static bool _initialized;
     private static readonly object _lock = new();
+    private static readonly bool _enableDebugLogging = 
+        Environment.GetEnvironmentVariable("TIDESDB_DEBUG") == "1" ||
+        Environment.GetEnvironmentVariable("CI") == "true";
+
+    private static void DebugLog(string message)
+    {
+        if (_enableDebugLogging)
+        {
+            Console.WriteLine($"[TidesDB.NativeLibraryResolver] {message}");
+        }
+    }
 
     /// <summary>
     /// Initializes the native library resolver. Must be called before any P/Invoke calls.
@@ -37,119 +48,178 @@ internal static class NativeLibraryResolver
         {
             if (_initialized) return;
             
-            NativeLibrary.SetDllImportResolver(typeof(NativeLibraryResolver).Assembly, DllImportResolver);
-            _initialized = true;
+            try
+            {
+                DebugLog("Initializing native library resolver...");
+                DebugLog($"Assembly: {typeof(NativeMethods).Assembly.FullName}");
+                DebugLog($"Assembly Location: {typeof(NativeMethods).Assembly.Location}");
+                DebugLog($"AppContext.BaseDirectory: {AppContext.BaseDirectory}");
+                DebugLog($"Environment.CurrentDirectory: {Environment.CurrentDirectory}");
+                DebugLog($"OS: {Environment.OSVersion}");
+                DebugLog($"Is Windows: {OperatingSystem.IsWindows()}");
+                
+                NativeLibrary.SetDllImportResolver(typeof(NativeMethods).Assembly, DllImportResolver);
+                _initialized = true;
+                DebugLog("Native library resolver initialized successfully.");
+            }
+            catch (Exception ex)
+            {
+                DebugLog($"Failed to initialize resolver: {ex.Message}");
+                // Silently ignore if resolver registration fails
+                // The default resolution will be used instead
+                _initialized = true;
+            }
         }
     }
 
     private static nint DllImportResolver(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
     {
-        if (libraryName != LibraryName)
+        try
         {
-            return nint.Zero;
-        }
-
-        // Try to load from various locations
-        nint handle;
-
-        // First, try the default resolution
-        if (NativeLibrary.TryLoad(libraryName, assembly, searchPath, out handle))
-        {
-            return handle;
-        }
-
-        // Get the directory where the assembly is located
-        var assemblyLocation = assembly.Location;
-        var assemblyDir = string.IsNullOrEmpty(assemblyLocation) 
-            ? AppContext.BaseDirectory 
-            : Path.GetDirectoryName(assemblyLocation) ?? AppContext.BaseDirectory;
-
-        // Platform-specific library names to try
-        var libraryNames = GetPlatformLibraryNames();
-
-        // Search paths to try
-        var searchPaths = new List<string>
-        {
-            assemblyDir,
-            AppContext.BaseDirectory,
-            Environment.CurrentDirectory
-        };
-
-        // Add platform-specific paths
-        if (OperatingSystem.IsWindows())
-        {
-            // Add common Windows paths for MSYS2/MinGW
-            var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
-            foreach (var pathDir in pathEnv.Split(';', StringSplitOptions.RemoveEmptyEntries))
+            DebugLog($"DllImportResolver called for: {libraryName}");
+            
+            if (libraryName != LibraryName)
             {
-                if (pathDir.Contains("mingw64", StringComparison.OrdinalIgnoreCase) ||
-                    pathDir.Contains("msys64", StringComparison.OrdinalIgnoreCase))
+                DebugLog($"Skipping - not our library (expected: {LibraryName})");
+                return nint.Zero;
+            }
+
+            // Try to load from various locations
+            nint handle;
+
+            // First, try the default resolution
+            DebugLog("Trying default resolution...");
+            if (NativeLibrary.TryLoad(libraryName, assembly, searchPath, out handle))
+            {
+                DebugLog("Default resolution succeeded!");
+                return handle;
+            }
+            DebugLog("Default resolution failed.");
+
+            // Get the directory where the assembly is located
+            var assemblyLocation = assembly.Location;
+            var assemblyDir = string.IsNullOrEmpty(assemblyLocation) 
+                ? AppContext.BaseDirectory 
+                : Path.GetDirectoryName(assemblyLocation) ?? AppContext.BaseDirectory;
+
+            DebugLog($"Assembly directory: {assemblyDir}");
+
+            // Platform-specific library names to try
+            var libraryNames = GetPlatformLibraryNames();
+            DebugLog($"Library names to try: {string.Join(", ", libraryNames)}");
+
+            // Search paths to try
+            var searchPaths = new List<string>
+            {
+                assemblyDir,
+                AppContext.BaseDirectory,
+                Environment.CurrentDirectory
+            };
+
+            // Add platform-specific paths
+            if (OperatingSystem.IsWindows())
+            {
+                // Add common Windows paths for MSYS2/MinGW
+                var pathEnv = Environment.GetEnvironmentVariable("PATH") ?? "";
+                foreach (var pathDir in pathEnv.Split(';', StringSplitOptions.RemoveEmptyEntries))
                 {
-                    searchPaths.Add(pathDir);
+                    if (pathDir.Contains("mingw64", StringComparison.OrdinalIgnoreCase) ||
+                        pathDir.Contains("msys64", StringComparison.OrdinalIgnoreCase))
+                    {
+                        searchPaths.Add(pathDir);
+                    }
+                }
+                
+                // Common MSYS2 installation paths
+                searchPaths.Add(@"C:\msys64\mingw64\bin");
+                searchPaths.Add(@"D:\a\_temp\msys64\mingw64\bin");
+                
+                // Check RUNNER_TEMP for GitHub Actions
+                var runnerTemp = Environment.GetEnvironmentVariable("RUNNER_TEMP");
+                if (!string.IsNullOrEmpty(runnerTemp))
+                {
+                    searchPaths.Add(Path.Combine(runnerTemp, "msys64", "mingw64", "bin"));
                 }
             }
-            
-            // Common MSYS2 installation paths
-            searchPaths.Add(@"C:\msys64\mingw64\bin");
-            searchPaths.Add(@"D:\a\_temp\msys64\mingw64\bin");
-            
-            // Check RUNNER_TEMP for GitHub Actions
-            var runnerTemp = Environment.GetEnvironmentVariable("RUNNER_TEMP");
-            if (!string.IsNullOrEmpty(runnerTemp))
+            else if (OperatingSystem.IsLinux())
             {
-                searchPaths.Add(Path.Combine(runnerTemp, "msys64", "mingw64", "bin"));
+                searchPaths.Add("/usr/lib");
+                searchPaths.Add("/usr/local/lib");
+                searchPaths.Add("/lib");
+                searchPaths.Add("/lib/x86_64-linux-gnu");
             }
-        }
-        else if (OperatingSystem.IsLinux())
-        {
-            searchPaths.Add("/usr/lib");
-            searchPaths.Add("/usr/local/lib");
-            searchPaths.Add("/lib");
-            searchPaths.Add("/lib/x86_64-linux-gnu");
-        }
-        else if (OperatingSystem.IsMacOS())
-        {
-            searchPaths.Add("/usr/local/lib");
-            searchPaths.Add("/opt/homebrew/lib");
-            
-            // Try to get Homebrew prefix
-            var homebrewPrefix = Environment.GetEnvironmentVariable("HOMEBREW_PREFIX");
-            if (!string.IsNullOrEmpty(homebrewPrefix))
+            else if (OperatingSystem.IsMacOS())
             {
-                searchPaths.Add(Path.Combine(homebrewPrefix, "lib"));
-            }
-        }
-
-        // Try each combination of path and library name
-        foreach (var path in searchPaths.Distinct())
-        {
-            if (string.IsNullOrEmpty(path) || !Directory.Exists(path))
-                continue;
-
-            foreach (var libName in libraryNames)
-            {
-                var fullPath = Path.Combine(path, libName);
-                if (File.Exists(fullPath))
+                searchPaths.Add("/usr/local/lib");
+                searchPaths.Add("/opt/homebrew/lib");
+                
+                // Try to get Homebrew prefix
+                var homebrewPrefix = Environment.GetEnvironmentVariable("HOMEBREW_PREFIX");
+                if (!string.IsNullOrEmpty(homebrewPrefix))
                 {
-                    if (NativeLibrary.TryLoad(fullPath, out handle))
+                    searchPaths.Add(Path.Combine(homebrewPrefix, "lib"));
+                }
+            }
+
+            DebugLog($"Search paths: {string.Join(", ", searchPaths)}");
+
+            // Try each combination of path and library name
+            foreach (var path in searchPaths.Distinct())
+            {
+                if (string.IsNullOrEmpty(path))
+                {
+                    DebugLog($"Skipping empty path");
+                    continue;
+                }
+                
+                if (!Directory.Exists(path))
+                {
+                    DebugLog($"Path does not exist: {path}");
+                    continue;
+                }
+
+                DebugLog($"Searching in: {path}");
+                foreach (var libName in libraryNames)
+                {
+                    var fullPath = Path.Combine(path, libName);
+                    var exists = File.Exists(fullPath);
+                    DebugLog($"  Checking: {fullPath} - Exists: {exists}");
+                    
+                    if (exists)
                     {
-                        return handle;
+                        DebugLog($"  Attempting to load: {fullPath}");
+                        if (NativeLibrary.TryLoad(fullPath, out handle))
+                        {
+                            DebugLog($"  SUCCESS: Loaded {fullPath}");
+                            return handle;
+                        }
+                        DebugLog($"  FAILED to load: {fullPath}");
                     }
                 }
             }
-        }
 
-        // Last resort: try loading by name only (let the OS search)
-        foreach (var libName in libraryNames)
-        {
-            if (NativeLibrary.TryLoad(libName, out handle))
+            // Last resort: try loading by name only (let the OS search)
+            DebugLog("Trying last resort - loading by name only...");
+            foreach (var libName in libraryNames)
             {
-                return handle;
+                DebugLog($"  Trying: {libName}");
+                if (NativeLibrary.TryLoad(libName, out handle))
+                {
+                    DebugLog($"  SUCCESS: Loaded {libName}");
+                    return handle;
+                }
             }
-        }
 
-        // Return zero to let the default resolver handle it (which will throw)
-        return nint.Zero;
+            // Return zero to let the default resolver handle it (which will throw)
+            DebugLog("All attempts failed. Returning zero for default resolution.");
+            return nint.Zero;
+        }
+        catch (Exception ex)
+        {
+            DebugLog($"Exception in DllImportResolver: {ex.Message}");
+            // If anything fails, return zero to let the default resolver handle it
+            return nint.Zero;
+        }
     }
 
     private static string[] GetPlatformLibraryNames()
