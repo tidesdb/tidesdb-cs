@@ -65,7 +65,9 @@ public sealed class TidesDb : IDisposable
             NumCompactionThreads = config.NumCompactionThreads,
             LogLevel = (int)config.LogLevel,
             BlockCacheSize = (nuint)config.BlockCacheSize,
-            MaxOpenSstables = (nuint)config.MaxOpenSstables
+            MaxOpenSstables = (nuint)config.MaxOpenSstables,
+            LogToFile = config.LogToFile ? 1 : 0,
+            LogTruncationAt = (nuint)config.LogTruncationAt
         };
 
         var result = NativeMethods.tidesdb_open(ref nativeConfig, out var dbHandle);
