@@ -52,6 +52,16 @@ public sealed class Config
     public ulong MaxOpenSstables { get; init; } = 256;
 
     /// <summary>
+    /// Flag to determine if debug logging should be written to a file (default: false).
+    /// </summary>
+    public bool LogToFile { get; init; } = false;
+
+    /// <summary>
+    /// Log file truncation threshold in bytes (0 = no truncation, default: 0).
+    /// </summary>
+    public ulong LogTruncationAt { get; init; } = 0;
+
+    /// <summary>
     /// Creates a default configuration with the specified database path.
     /// </summary>
     public static Config Default(string dbPath) => new()

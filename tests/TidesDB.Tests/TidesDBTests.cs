@@ -323,4 +323,38 @@ public class TidesDBTests : IDisposable
         Assert.NotNull(readTxn.Get(cf1, Encoding.UTF8.GetBytes("key1")));
         Assert.NotNull(readTxn.Get(cf2, Encoding.UTF8.GetBytes("key2")));
     }
+
+    [Fact]
+    public void OpenWithLogToFile_ShouldSucceed()
+    {
+        var testPath = Path.Combine(Path.GetTempPath(), $"tidesdb_logtest_{Guid.NewGuid()}");
+        try
+        {
+            var config = new Config
+            {
+                DbPath = testPath,
+                NumFlushThreads = 2,
+                NumCompactionThreads = 2,
+                LogLevel = LogLevel.Debug,
+                BlockCacheSize = 64 * 1024 * 1024,
+                MaxOpenSstables = 256,
+                LogToFile = true,
+                LogTruncationAt = 10 * 1024 * 1024
+            };
+
+            using var db = TidesDb.Open(config);
+            Assert.NotNull(db);
+
+            db.CreateColumnFamily("test_cf");
+            var cf = db.GetColumnFamily("test_cf");
+            Assert.NotNull(cf);
+        }
+        finally
+        {
+            if (Directory.Exists(testPath))
+            {
+                Directory.Delete(testPath, true);
+            }
+        }
+    }
 }
