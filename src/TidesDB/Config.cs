@@ -176,6 +176,11 @@ public sealed class ColumnFamilyConfig
     public int L0QueueStallThreshold { get; init; } = 20;
 
     /// <summary>
+    /// Use B+tree format for klog (default: false = block-based).
+    /// </summary>
+    public bool UseBtree { get; init; } = false;
+
+    /// <summary>
     /// Creates a default column family configuration.
     /// </summary>
     public static ColumnFamilyConfig Default => new();

@@ -63,13 +63,24 @@ public sealed class ColumnFamily
             var stats = new Stats
             {
                 NumLevels = nativeStats.NumLevels,
-                MemtableSize = (ulong)nativeStats.MemtableSize
+                MemtableSize = (ulong)nativeStats.MemtableSize,
+                TotalKeys = nativeStats.TotalKeys,
+                TotalDataSize = nativeStats.TotalDataSize,
+                AvgKeySize = nativeStats.AvgKeySize,
+                AvgValueSize = nativeStats.AvgValueSize,
+                ReadAmp = nativeStats.ReadAmp,
+                HitRate = nativeStats.HitRate,
+                UseBtree = nativeStats.UseBtree != 0,
+                BtreeTotalNodes = nativeStats.BtreeTotalNodes,
+                BtreeMaxHeight = nativeStats.BtreeMaxHeight,
+                BtreeAvgHeight = nativeStats.BtreeAvgHeight
             };
 
             if (nativeStats.NumLevels > 0)
             {
                 var levelSizes = new ulong[nativeStats.NumLevels];
                 var levelNumSstables = new int[nativeStats.NumLevels];
+                var levelKeyCounts = new ulong[nativeStats.NumLevels];
 
                 if (nativeStats.LevelSizes != nint.Zero)
                 {
@@ -87,10 +98,19 @@ public sealed class ColumnFamily
                     }
                 }
 
+                if (nativeStats.LevelKeyCounts != nint.Zero)
+                {
+                    for (int i = 0; i < nativeStats.NumLevels; i++)
+                    {
+                        levelKeyCounts[i] = (ulong)Marshal.ReadInt64(nativeStats.LevelKeyCounts, i * sizeof(ulong));
+                    }
+                }
+
                 return stats with
                 {
                     LevelSizes = levelSizes,
-                    LevelNumSstables = levelNumSstables
+                    LevelNumSstables = levelNumSstables,
+                    LevelKeyCounts = levelKeyCounts
                 };
             }
 
