@@ -228,6 +228,7 @@ public sealed class TidesDb : IDisposable
             MinDiskSpace = config.MinDiskSpace,
             L1FileCountTrigger = config.L1FileCountTrigger,
             L0QueueStallThreshold = config.L0QueueStallThreshold,
+            UseBtree = config.UseBtree ? 1 : 0,
             ComparatorFnCached = nint.Zero,
             ComparatorCtxCached = nint.Zero
         };

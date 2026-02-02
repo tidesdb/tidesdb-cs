@@ -57,6 +57,7 @@ internal unsafe struct NativeColumnFamilyConfig
     public ulong MinDiskSpace;
     public int L1FileCountTrigger;
     public int L0QueueStallThreshold;
+    public int UseBtree;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -66,7 +67,18 @@ internal struct NativeStats
     public nuint MemtableSize;
     public nint LevelSizes;
     public nint LevelNumSstables;
+    public nint LevelKeyCounts;
     public nint Config;
+    public ulong TotalKeys;
+    public ulong TotalDataSize;
+    public double AvgKeySize;
+    public double AvgValueSize;
+    public double ReadAmp;
+    public double HitRate;
+    public int UseBtree;
+    public ulong BtreeTotalNodes;
+    public uint BtreeMaxHeight;
+    public double BtreeAvgHeight;
 }
 
 [StructLayout(LayoutKind.Sequential)]

@@ -42,9 +42,64 @@ public sealed record Stats
     public int[] LevelNumSstables { get; init; } = [];
 
     /// <summary>
+    /// Number of keys in each level.
+    /// </summary>
+    public ulong[] LevelKeyCounts { get; init; } = [];
+
+    /// <summary>
     /// Column family configuration.
     /// </summary>
     public ColumnFamilyConfig? Config { get; init; }
+
+    /// <summary>
+    /// Total keys across memtable and all SSTables.
+    /// </summary>
+    public ulong TotalKeys { get; init; }
+
+    /// <summary>
+    /// Total data size (klog + vlog) in bytes.
+    /// </summary>
+    public ulong TotalDataSize { get; init; }
+
+    /// <summary>
+    /// Estimated average key size in bytes.
+    /// </summary>
+    public double AvgKeySize { get; init; }
+
+    /// <summary>
+    /// Estimated average value size in bytes.
+    /// </summary>
+    public double AvgValueSize { get; init; }
+
+    /// <summary>
+    /// Read amplification factor (point lookup cost).
+    /// </summary>
+    public double ReadAmp { get; init; }
+
+    /// <summary>
+    /// Block cache hit rate (0.0 to 1.0).
+    /// </summary>
+    public double HitRate { get; init; }
+
+    /// <summary>
+    /// Whether column family uses B+tree format.
+    /// </summary>
+    public bool UseBtree { get; init; }
+
+    /// <summary>
+    /// Total B+tree nodes across all SSTables (only populated if UseBtree=true).
+    /// </summary>
+    public ulong BtreeTotalNodes { get; init; }
+
+    /// <summary>
+    /// Maximum tree height across all SSTables (only populated if UseBtree=true).
+    /// </summary>
+    public uint BtreeMaxHeight { get; init; }
+
+    /// <summary>
+    /// Average tree height across all SSTables (only populated if UseBtree=true).
+    /// </summary>
+    public double BtreeAvgHeight { get; init; }
 }
 
 /// <summary>

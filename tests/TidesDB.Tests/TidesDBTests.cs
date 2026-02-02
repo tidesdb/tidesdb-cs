@@ -357,4 +357,75 @@ public class TidesDBTests : IDisposable
             }
         }
     }
+
+    [Fact]
+    public void CreateColumnFamily_WithUseBtree_ShouldSucceed()
+    {
+        using var db = OpenDatabase();
+        var cfConfig = new ColumnFamilyConfig
+        {
+            WriteBufferSize = 32 * 1024 * 1024,
+            CompressionAlgorithm = CompressionAlgorithm.Lz4,
+            EnableBloomFilter = true,
+            BloomFpr = 0.01,
+            UseBtree = true
+        };
+        db.CreateColumnFamily("btree_cf", cfConfig);
+
+        var cf = db.GetColumnFamily("btree_cf");
+        Assert.NotNull(cf);
+    }
+
+    [Fact]
+    public void ColumnFamily_GetStats_ShouldReturnExtendedStats()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        using (var txn = db.BeginTransaction())
+        {
+            for (int i = 0; i < 100; i++)
+            {
+                var key = Encoding.UTF8.GetBytes($"key{i:D4}");
+                var value = Encoding.UTF8.GetBytes($"value{i}");
+                txn.Put(cf, key, value);
+            }
+            txn.Commit();
+        }
+
+        var stats = cf.GetStats();
+        Assert.NotNull(stats);
+        Assert.True(stats.NumLevels >= 0);
+        Assert.NotNull(stats.LevelSizes);
+        Assert.NotNull(stats.LevelNumSstables);
+        Assert.NotNull(stats.LevelKeyCounts);
+    }
+
+    [Fact]
+    public void ColumnFamily_GetStats_WithBtree_ShouldReturnBtreeStats()
+    {
+        using var db = OpenDatabase();
+        var cfConfig = new ColumnFamilyConfig
+        {
+            WriteBufferSize = 1 * 1024 * 1024,
+            UseBtree = true
+        };
+        db.CreateColumnFamily("btree_cf", cfConfig);
+        var cf = db.GetColumnFamily("btree_cf")!;
+
+        using (var txn = db.BeginTransaction())
+        {
+            for (int i = 0; i < 50; i++)
+            {
+                var key = Encoding.UTF8.GetBytes($"key{i:D4}");
+                var value = Encoding.UTF8.GetBytes($"value{i}");
+                txn.Put(cf, key, value);
+            }
+            txn.Commit();
+        }
+
+        var stats = cf.GetStats();
+        Assert.NotNull(stats);
+    }
 }
