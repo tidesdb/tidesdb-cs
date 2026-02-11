@@ -29,20 +29,6 @@ public sealed class TidesDb : IDisposable
     private bool _disposed;
     private nint _dbPathPtr;
 
-    static TidesDb()
-    {
-        try
-        {
-            // Initialize the native library resolver before any P/Invoke calls
-            NativeLibraryResolver.Initialize();
-        }
-        catch
-        {
-            // Silently ignore initialization failures
-            // Native library loading will use default resolution
-        }
-    }
-
     private TidesDb(nint handle, nint dbPathPtr)
     {
         _handle = handle;
@@ -104,6 +90,41 @@ public sealed class TidesDb : IDisposable
         ThrowIfDisposed();
         var result = NativeMethods.tidesdb_drop_column_family(_handle, name);
         TidesDBException.ThrowIfError(result, "failed to drop column family");
+    }
+
+    /// <summary>
+    /// Clones a column family, creating a complete copy with a new name.
+    /// </summary>
+    /// <param name="sourceName">The source column family name.</param>
+    /// <param name="destName">The destination column family name.</param>
+    public void CloneColumnFamily(string sourceName, string destName)
+    {
+        ThrowIfDisposed();
+        var result = NativeMethods.tidesdb_clone_column_family(_handle, sourceName, destName);
+        TidesDBException.ThrowIfError(result, "failed to clone column family");
+    }
+
+    /// <summary>
+    /// Renames a column family atomically.
+    /// </summary>
+    /// <param name="oldName">The current column family name.</param>
+    /// <param name="newName">The new column family name.</param>
+    public void RenameColumnFamily(string oldName, string newName)
+    {
+        ThrowIfDisposed();
+        var result = NativeMethods.tidesdb_rename_column_family(_handle, oldName, newName);
+        TidesDBException.ThrowIfError(result, "failed to rename column family");
+    }
+
+    /// <summary>
+    /// Creates an on-disk backup of the database without blocking reads/writes.
+    /// </summary>
+    /// <param name="dir">The backup directory path. Must be non-existent or empty.</param>
+    public void Backup(string dir)
+    {
+        ThrowIfDisposed();
+        var result = NativeMethods.tidesdb_backup(_handle, dir);
+        TidesDBException.ThrowIfError(result, "failed to backup database");
     }
 
     /// <summary>
