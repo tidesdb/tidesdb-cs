@@ -25,7 +25,7 @@ namespace TidesDB.Native;
 /// </summary>
 internal static class NativeLibraryResolver
 {
-    private const string LibraryName = "tidesdb";
+    private const string LibraryName = "libtidesdb";
     private static bool _initialized;
     private static readonly object _lock = new();
     private static readonly bool _enableDebugLogging = 
@@ -235,7 +235,6 @@ internal static class NativeLibraryResolver
         {
             return new[]
             {
-                "tidesdb.dll",
                 "libtidesdb.dll"
             };
         }

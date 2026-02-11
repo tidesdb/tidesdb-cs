@@ -155,8 +155,6 @@ jobs:
           cmake --install build --prefix /mingw64
           # Copy the DLL to bin directory for runtime discovery
           cp build/libtidesdb.dll /mingw64/bin/
-          # Also copy as tidesdb.dll for P/Invoke discovery
-          cp build/libtidesdb.dll /mingw64/bin/tidesdb.dll
           # Verify the DLL has the expected exports
           echo "=== Verifying DLL exports ==="
           objdump -p build/libtidesdb.dll | grep -E "tidesdb_open|tidesdb_close" || echo "Warning: Expected exports not found"
@@ -268,7 +266,6 @@ jobs:
           foreach ($dir in @($testDir, $libDir)) {
             if (-not (Test-Path $dir)) { continue }
             Copy-Item $libtidesdbPath "$dir\libtidesdb.dll" -Force
-            Copy-Item $libtidesdbPath "$dir\tidesdb.dll" -Force
             foreach ($dep in $nativeDlls) {
               $src = "$msys2Bin\$dep"
               if (Test-Path $src) { Copy-Item $src $dir -Force }

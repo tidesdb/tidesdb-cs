@@ -20,7 +20,7 @@ namespace TidesDB.Native;
 
 internal static partial class NativeMethods
 {
-    private const string LibraryName = "tidesdb";
+    private const string LibraryName = "libtidesdb";
 
     // Database operations
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_open")]
