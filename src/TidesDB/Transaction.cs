@@ -170,6 +170,18 @@ public sealed class Transaction : IDisposable
     }
 
     /// <summary>
+    /// Resets a committed or aborted transaction for reuse with a new isolation level.
+    /// This avoids the overhead of freeing and reallocating transaction resources.
+    /// </summary>
+    /// <param name="isolation">The new isolation level for the reset transaction.</param>
+    public void Reset(IsolationLevel isolation)
+    {
+        ThrowIfDisposed();
+        var result = NativeMethods.tidesdb_txn_reset(_handle, (int)isolation);
+        TidesDBException.ThrowIfError(result, "failed to reset transaction");
+    }
+
+    /// <summary>
     /// Creates a new iterator for a column family within this transaction.
     /// </summary>
     /// <param name="cf">The column family.</param>

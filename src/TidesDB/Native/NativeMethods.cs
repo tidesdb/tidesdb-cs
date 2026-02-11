@@ -111,12 +111,33 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_iter_free")]
     internal static partial void tidesdb_iter_free(nint iter);
 
+    // Transaction reset
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_txn_reset")]
+    internal static partial int tidesdb_txn_reset(nint txn, int isolation);
+
+    // Column family clone/rename operations
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_clone_column_family", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tidesdb_clone_column_family(nint db, string sourceName, string destName);
+
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_rename_column_family", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tidesdb_rename_column_family(nint db, string oldName, string newName);
+
+    // Backup operations
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_backup", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tidesdb_backup(nint db, string dir);
+
     // Maintenance operations
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_compact")]
     internal static partial int tidesdb_compact(nint cf);
 
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_flush_memtable")]
     internal static partial int tidesdb_flush_memtable(nint cf);
+
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_is_flushing")]
+    internal static partial int tidesdb_is_flushing(nint cf);
+
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_is_compacting")]
+    internal static partial int tidesdb_is_compacting(nint cf);
 
     // Statistics operations
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_get_stats")]

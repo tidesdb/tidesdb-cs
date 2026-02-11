@@ -32,6 +32,24 @@ public sealed class ColumnFamily
     }
 
     /// <summary>
+    /// Checks if a flush operation is in progress for this column family.
+    /// </summary>
+    /// <returns>True if flushing is in progress.</returns>
+    public bool IsFlushing()
+    {
+        return NativeMethods.tidesdb_is_flushing(Handle) == 1;
+    }
+
+    /// <summary>
+    /// Checks if a compaction operation is in progress for this column family.
+    /// </summary>
+    /// <returns>True if compaction is in progress.</returns>
+    public bool IsCompacting()
+    {
+        return NativeMethods.tidesdb_is_compacting(Handle) == 1;
+    }
+
+    /// <summary>
     /// Manually triggers compaction for this column family.
     /// </summary>
     public void Compact()

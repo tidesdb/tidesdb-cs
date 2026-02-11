@@ -15,6 +15,7 @@
 // limitations under the License.
 
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace TidesDB.Native;
@@ -40,9 +41,14 @@ internal static class NativeLibraryResolver
     }
 
     /// <summary>
-    /// Initializes the native library resolver. Must be called before any P/Invoke calls.
+    /// Module initializer that runs when the assembly is first loaded,
+    /// before any type in the assembly is accessed. This ensures the
+    /// native library resolver is registered before P/Invoke stubs are JIT-compiled.
     /// </summary>
+#pragma warning disable CA2255 // The 'ModuleInitializer' attribute should not be used in libraries
+    [ModuleInitializer]
     internal static void Initialize()
+#pragma warning restore CA2255
     {
         lock (_lock)
         {
@@ -51,14 +57,15 @@ internal static class NativeLibraryResolver
             try
             {
                 DebugLog("Initializing native library resolver...");
-                DebugLog($"Assembly: {typeof(NativeMethods).Assembly.FullName}");
-                DebugLog($"Assembly Location: {typeof(NativeMethods).Assembly.Location}");
+                var assembly = Assembly.GetExecutingAssembly();
+                DebugLog($"Assembly: {assembly.FullName}");
+                DebugLog($"Assembly Location: {assembly.Location}");
                 DebugLog($"AppContext.BaseDirectory: {AppContext.BaseDirectory}");
                 DebugLog($"Environment.CurrentDirectory: {Environment.CurrentDirectory}");
                 DebugLog($"OS: {Environment.OSVersion}");
                 DebugLog($"Is Windows: {OperatingSystem.IsWindows()}");
                 
-                NativeLibrary.SetDllImportResolver(typeof(NativeMethods).Assembly, DllImportResolver);
+                NativeLibrary.SetDllImportResolver(assembly, DllImportResolver);
                 _initialized = true;
                 DebugLog("Native library resolver initialized successfully.");
             }
