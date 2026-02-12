@@ -573,7 +573,7 @@ public class TidesDBTests : IDisposable
             txn.Commit();
         }
 
-        var checkpointPath = Path.Combine(Path.GetTempPath(), $"tidesdb_checkpoint_{Guid.NewGuid()}");
+        var checkpointPath = _testDbPath + "_checkpoint";
         try
         {
             db.Checkpoint(checkpointPath);
