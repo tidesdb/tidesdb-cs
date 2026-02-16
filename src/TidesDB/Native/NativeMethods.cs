@@ -126,6 +126,10 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_backup", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int tidesdb_backup(nint db, string dir);
 
+    // Checkpoint operations
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_checkpoint", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tidesdb_checkpoint(nint db, string checkpointDir);
+
     // Maintenance operations
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_compact")]
     internal static partial int tidesdb_compact(nint cf);

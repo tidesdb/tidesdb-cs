@@ -561,6 +561,34 @@ public class TidesDBTests : IDisposable
     }
 
     [Fact]
+    public void Checkpoint_ShouldSucceed()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
+            txn.Commit();
+        }
+
+        var checkpointPath = _testDbPath + "_checkpoint";
+        try
+        {
+            db.Checkpoint(checkpointPath);
+            Assert.True(Directory.Exists(checkpointPath));
+        }
+        finally
+        {
+            if (Directory.Exists(checkpointPath))
+            {
+                Directory.Delete(checkpointPath, true);
+            }
+        }
+    }
+
+    [Fact]
     public void ColumnFamily_IsFlushing_ShouldReturnBool()
     {
         using var db = OpenDatabase();

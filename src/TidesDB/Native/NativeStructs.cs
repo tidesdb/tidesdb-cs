@@ -34,6 +34,7 @@ internal struct NativeConfig
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct NativeColumnFamilyConfig
 {
+    public fixed byte Name[128];
     public nuint WriteBufferSize;
     public nuint LevelSizeRatio;
     public int MinLevels;

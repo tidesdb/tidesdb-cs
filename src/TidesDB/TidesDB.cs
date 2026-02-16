@@ -128,6 +128,17 @@ public sealed class TidesDb : IDisposable
     }
 
     /// <summary>
+    /// Creates a lightweight, near-instant snapshot of the database using hard links.
+    /// </summary>
+    /// <param name="checkpointDir">The checkpoint directory path. Must be non-existent or empty.</param>
+    public void Checkpoint(string checkpointDir)
+    {
+        ThrowIfDisposed();
+        var result = NativeMethods.tidesdb_checkpoint(_handle, checkpointDir);
+        TidesDBException.ThrowIfError(result, "failed to checkpoint database");
+    }
+
+    /// <summary>
     /// Gets a column family by name.
     /// </summary>
     /// <param name="name">The column family name.</param>
