@@ -161,6 +161,10 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_register_comparator", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int tidesdb_register_comparator(nint db, string name, nint fn, string? ctxStr, nint ctx);
 
+    // Range cost estimation
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_range_cost")]
+    internal static unsafe partial int tidesdb_range_cost(nint cf, byte* keyA, nuint keyASize, byte* keyB, nuint keyBSize, out double cost);
+
     // Memory operations
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_free")]
     internal static partial void tidesdb_free(nint ptr);

@@ -609,4 +609,101 @@ public class TidesDBTests : IDisposable
         var isCompacting = cf.IsCompacting();
         Assert.False(isCompacting);
     }
+
+    [Fact]
+    public void RangeCost_EmptyColumnFamily_ShouldReturnZero()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        var cost = cf.RangeCost(
+            Encoding.UTF8.GetBytes("key_a"),
+            Encoding.UTF8.GetBytes("key_z"));
+
+        Assert.Equal(0.0, cost);
+    }
+
+    [Fact]
+    public void RangeCost_WithData_ShouldReturnNonNegative()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        using (var txn = db.BeginTransaction())
+        {
+            for (int i = 0; i < 100; i++)
+            {
+                var key = Encoding.UTF8.GetBytes($"key{i:D4}");
+                var value = Encoding.UTF8.GetBytes($"value{i}");
+                txn.Put(cf, key, value);
+            }
+            txn.Commit();
+        }
+
+        var cost = cf.RangeCost(
+            Encoding.UTF8.GetBytes("key0000"),
+            Encoding.UTF8.GetBytes("key0099"));
+
+        Assert.True(cost >= 0.0);
+    }
+
+    [Fact]
+    public void RangeCost_WiderRange_ShouldCostMoreOrEqual()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        using (var txn = db.BeginTransaction())
+        {
+            for (int i = 0; i < 100; i++)
+            {
+                var key = Encoding.UTF8.GetBytes($"key{i:D4}");
+                var value = Encoding.UTF8.GetBytes($"value{i}");
+                txn.Put(cf, key, value);
+            }
+            txn.Commit();
+        }
+
+        var narrowCost = cf.RangeCost(
+            Encoding.UTF8.GetBytes("key0000"),
+            Encoding.UTF8.GetBytes("key0010"));
+
+        var wideCost = cf.RangeCost(
+            Encoding.UTF8.GetBytes("key0000"),
+            Encoding.UTF8.GetBytes("key0099"));
+
+        Assert.True(wideCost >= narrowCost);
+    }
+
+    [Fact]
+    public void RangeCost_ReversedKeys_ShouldReturnSameResult()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        using (var txn = db.BeginTransaction())
+        {
+            for (int i = 0; i < 50; i++)
+            {
+                var key = Encoding.UTF8.GetBytes($"key{i:D4}");
+                var value = Encoding.UTF8.GetBytes($"value{i}");
+                txn.Put(cf, key, value);
+            }
+            txn.Commit();
+        }
+
+        var costAB = cf.RangeCost(
+            Encoding.UTF8.GetBytes("key0000"),
+            Encoding.UTF8.GetBytes("key0049"));
+
+        var costBA = cf.RangeCost(
+            Encoding.UTF8.GetBytes("key0049"),
+            Encoding.UTF8.GetBytes("key0000"));
+
+        Assert.Equal(costAB, costBA);
+    }
 }
