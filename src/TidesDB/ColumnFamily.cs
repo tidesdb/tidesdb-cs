@@ -68,6 +68,35 @@ public sealed class ColumnFamily
     }
 
     /// <summary>
+    /// Estimates the computational cost of iterating between two keys.
+    /// The returned value is an opaque double — meaningful only for comparison
+    /// with other values from the same method. Uses only in-memory metadata
+    /// and performs no disk I/O. Key order does not matter.
+    /// </summary>
+    /// <param name="keyA">First key (bound of range).</param>
+    /// <param name="keyB">Second key (bound of range).</param>
+    /// <returns>Estimated traversal cost (higher = more expensive). 0.0 means no overlapping SSTables or memtable entries.</returns>
+    public double RangeCost(ReadOnlySpan<byte> keyA, ReadOnlySpan<byte> keyB)
+    {
+        int result;
+        double cost;
+        unsafe
+        {
+            fixed (byte* keyAPtr = keyA)
+            fixed (byte* keyBPtr = keyB)
+            {
+                result = NativeMethods.tidesdb_range_cost(
+                    Handle,
+                    keyAPtr, (nuint)keyA.Length,
+                    keyBPtr, (nuint)keyB.Length,
+                    out cost);
+            }
+        }
+        TidesDBException.ThrowIfError(result, "failed to estimate range cost");
+        return cost;
+    }
+
+    /// <summary>
     /// Gets statistics about this column family.
     /// </summary>
     public Stats GetStats()
