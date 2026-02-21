@@ -26,9 +26,95 @@ public sealed class ColumnFamily
 {
     internal readonly nint Handle;
 
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate int NativeCommitHookFn(nint ops, int numOps, ulong commitSeq, nint ctx);
+
+    private static readonly NativeCommitHookFn s_hookBridge = CommitHookBridge;
+    private static readonly nint s_hookBridgePtr = Marshal.GetFunctionPointerForDelegate(s_hookBridge);
+
+    private GCHandle _hookGcHandle;
+
     internal ColumnFamily(nint handle)
     {
         Handle = handle;
+    }
+
+    /// <summary>
+    /// Sets a commit hook callback that fires synchronously after every transaction
+    /// commit on this column family. The hook receives the full batch of committed
+    /// operations atomically. Pass null or call ClearCommitHook to disable.
+    /// </summary>
+    /// <param name="handler">The commit hook callback.</param>
+    public void SetCommitHook(CommitHookHandler handler)
+    {
+        ClearCommitHook();
+
+        _hookGcHandle = GCHandle.Alloc(handler);
+        var result = NativeMethods.tidesdb_cf_set_commit_hook(
+            Handle, s_hookBridgePtr, GCHandle.ToIntPtr(_hookGcHandle));
+
+        if (result != 0)
+        {
+            _hookGcHandle.Free();
+            _hookGcHandle = default;
+            TidesDBException.ThrowIfError(result, "failed to set commit hook");
+        }
+    }
+
+    /// <summary>
+    /// Clears the commit hook for this column family.
+    /// </summary>
+    public void ClearCommitHook()
+    {
+        var result = NativeMethods.tidesdb_cf_set_commit_hook(Handle, nint.Zero, nint.Zero);
+        TidesDBException.ThrowIfError(result, "failed to clear commit hook");
+
+        if (_hookGcHandle.IsAllocated)
+        {
+            _hookGcHandle.Free();
+            _hookGcHandle = default;
+        }
+    }
+
+    private static int CommitHookBridge(nint ops, int numOps, ulong commitSeq, nint ctx)
+    {
+        try
+        {
+            var handle = GCHandle.FromIntPtr(ctx);
+            var callback = (CommitHookHandler)handle.Target!;
+
+            var managedOps = new CommitOp[numOps];
+            var structSize = Marshal.SizeOf<NativeCommitOp>();
+            for (int i = 0; i < numOps; i++)
+            {
+                var nativeOp = Marshal.PtrToStructure<NativeCommitOp>(ops + i * structSize);
+
+                byte[] key = new byte[(int)nativeOp.KeySize];
+                Marshal.Copy(nativeOp.Key, key, 0, key.Length);
+
+                byte[]? value = null;
+                if (nativeOp.IsDelete == 0 && nativeOp.Value != nint.Zero)
+                {
+                    value = new byte[(int)nativeOp.ValueSize];
+                    Marshal.Copy(nativeOp.Value, value, 0, value.Length);
+                }
+
+                managedOps[i] = new CommitOp
+                {
+                    Key = key,
+                    Value = value,
+                    Ttl = nativeOp.Ttl,
+                    IsDelete = nativeOp.IsDelete != 0
+                };
+            }
+
+            callback(managedOps, commitSeq);
+            return 0;
+        }
+        catch
+        {
+            return -1;
+        }
     }
 
     /// <summary>

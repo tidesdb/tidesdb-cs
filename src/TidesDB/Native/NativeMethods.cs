@@ -161,6 +161,10 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_register_comparator", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int tidesdb_register_comparator(nint db, string name, nint fn, string? ctxStr, nint ctx);
 
+    // Commit hook operations
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_cf_set_commit_hook")]
+    internal static partial int tidesdb_cf_set_commit_hook(nint cf, nint fn, nint ctx);
+
     // Range cost estimation
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_range_cost")]
     internal static unsafe partial int tidesdb_range_cost(nint cf, byte* keyA, nuint keyASize, byte* keyB, nuint keyBSize, out double cost);
