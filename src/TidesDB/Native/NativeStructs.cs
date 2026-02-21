@@ -59,6 +59,19 @@ internal unsafe struct NativeColumnFamilyConfig
     public int L1FileCountTrigger;
     public int L0QueueStallThreshold;
     public int UseBtree;
+    public nint CommitHookFn;
+    public nint CommitHookCtx;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeCommitOp
+{
+    public nint Key;
+    public nuint KeySize;
+    public nint Value;
+    public nuint ValueSize;
+    public long Ttl;
+    public int IsDelete;
 }
 
 [StructLayout(LayoutKind.Sequential)]

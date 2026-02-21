@@ -611,6 +611,152 @@ public class TidesDBTests : IDisposable
     }
 
     [Fact]
+    public void CommitHook_ShouldFireOnCommit()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        var receivedOps = new List<CommitOp>();
+        ulong receivedSeq = 0;
+
+        cf.SetCommitHook((ops, seq) =>
+        {
+            receivedOps.AddRange(ops);
+            receivedSeq = seq;
+        });
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
+            txn.Commit();
+        }
+
+        Assert.Single(receivedOps);
+        Assert.Equal("key1", Encoding.UTF8.GetString(receivedOps[0].Key));
+        Assert.NotNull(receivedOps[0].Value);
+        Assert.Equal("value1", Encoding.UTF8.GetString(receivedOps[0].Value!));
+        Assert.False(receivedOps[0].IsDelete);
+        Assert.True(receivedSeq > 0);
+    }
+
+    [Fact]
+    public void CommitHook_ShouldReceiveDeleteOps()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
+            txn.Commit();
+        }
+
+        var receivedOps = new List<CommitOp>();
+
+        cf.SetCommitHook((ops, seq) =>
+        {
+            receivedOps.AddRange(ops);
+        });
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Delete(cf, Encoding.UTF8.GetBytes("key1"));
+            txn.Commit();
+        }
+
+        Assert.Single(receivedOps);
+        Assert.Equal("key1", Encoding.UTF8.GetString(receivedOps[0].Key));
+        Assert.True(receivedOps[0].IsDelete);
+        Assert.Null(receivedOps[0].Value);
+    }
+
+    [Fact]
+    public void CommitHook_ShouldReceiveMultipleOps()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        var receivedOps = new List<CommitOp>();
+
+        cf.SetCommitHook((ops, seq) =>
+        {
+            receivedOps.AddRange(ops);
+        });
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
+            txn.Put(cf, Encoding.UTF8.GetBytes("key2"), Encoding.UTF8.GetBytes("value2"));
+            txn.Put(cf, Encoding.UTF8.GetBytes("key3"), Encoding.UTF8.GetBytes("value3"));
+            txn.Commit();
+        }
+
+        Assert.Equal(3, receivedOps.Count);
+    }
+
+    [Fact]
+    public void CommitHook_ClearShouldStopFiring()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        int callCount = 0;
+
+        cf.SetCommitHook((ops, seq) =>
+        {
+            callCount++;
+        });
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
+            txn.Commit();
+        }
+
+        Assert.Equal(1, callCount);
+
+        cf.ClearCommitHook();
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Put(cf, Encoding.UTF8.GetBytes("key2"), Encoding.UTF8.GetBytes("value2"));
+            txn.Commit();
+        }
+
+        Assert.Equal(1, callCount);
+    }
+
+    [Fact]
+    public void CommitHook_SequenceNumberShouldIncrease()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        var seqNumbers = new List<ulong>();
+
+        cf.SetCommitHook((ops, seq) =>
+        {
+            seqNumbers.Add(seq);
+        });
+
+        for (int i = 0; i < 3; i++)
+        {
+            using var txn = db.BeginTransaction();
+            txn.Put(cf, Encoding.UTF8.GetBytes($"key{i}"), Encoding.UTF8.GetBytes($"value{i}"));
+            txn.Commit();
+        }
+
+        Assert.Equal(3, seqNumbers.Count);
+        Assert.True(seqNumbers[1] > seqNumbers[0]);
+        Assert.True(seqNumbers[2] > seqNumbers[1]);
+    }
+
+    [Fact]
     public void RangeCost_EmptyColumnFamily_ShouldReturnZero()
     {
         using var db = OpenDatabase();

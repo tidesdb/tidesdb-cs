@@ -261,6 +261,8 @@ public sealed class TidesDb : IDisposable
             L1FileCountTrigger = config.L1FileCountTrigger,
             L0QueueStallThreshold = config.L0QueueStallThreshold,
             UseBtree = config.UseBtree ? 1 : 0,
+            CommitHookFn = nint.Zero,
+            CommitHookCtx = nint.Zero,
             ComparatorFnCached = nint.Zero,
             ComparatorCtxCached = nint.Zero
         };
