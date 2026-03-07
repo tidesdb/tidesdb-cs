@@ -183,6 +183,21 @@ public sealed class ColumnFamily
     }
 
     /// <summary>
+    /// Updates runtime-safe configuration settings for this column family.
+    /// Changes apply to new operations only. Existing SSTables and memtables
+    /// retain their original settings.
+    /// </summary>
+    /// <param name="config">The new column family configuration.</param>
+    /// <param name="persistToDisk">If true, saves changes to config.ini on disk.</param>
+    public void UpdateRuntimeConfig(ColumnFamilyConfig config, bool persistToDisk = true)
+    {
+        var nativeConfig = TidesDb.CreateNativeColumnFamilyConfigPublic(config);
+        var result = NativeMethods.tidesdb_cf_update_runtime_config(
+            Handle, ref nativeConfig, persistToDisk ? 1 : 0);
+        TidesDBException.ThrowIfError(result, "failed to update runtime config");
+    }
+
+    /// <summary>
     /// Gets statistics about this column family.
     /// </summary>
     public Stats GetStats()
