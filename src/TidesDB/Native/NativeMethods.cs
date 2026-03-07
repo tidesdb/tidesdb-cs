@@ -165,6 +165,14 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_cf_set_commit_hook")]
     internal static partial int tidesdb_cf_set_commit_hook(nint cf, nint fn, nint ctx);
 
+    // Runtime config update
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_cf_update_runtime_config")]
+    internal static partial int tidesdb_cf_update_runtime_config(nint cf, ref NativeColumnFamilyConfig config, int persistToDisk);
+
+    // Get comparator
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_get_comparator", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tidesdb_get_comparator(nint db, string name, out nint fn, out nint ctx);
+
     // Range cost estimation
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_range_cost")]
     internal static unsafe partial int tidesdb_range_cost(nint cf, byte* keyA, nuint keyASize, byte* keyB, nuint keyBSize, out double cost);

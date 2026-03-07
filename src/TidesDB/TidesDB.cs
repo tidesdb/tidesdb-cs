@@ -52,6 +52,7 @@ public sealed class TidesDb : IDisposable
             LogLevel = (int)config.LogLevel,
             BlockCacheSize = (nuint)config.BlockCacheSize,
             MaxOpenSstables = (nuint)config.MaxOpenSstables,
+            MaxMemoryUsage = (nuint)config.MaxMemoryUsage,
             LogToFile = config.LogToFile ? 1 : 0,
             LogTruncationAt = (nuint)config.LogTruncationAt
         };
@@ -215,6 +216,19 @@ public sealed class TidesDb : IDisposable
     }
 
     /// <summary>
+    /// Retrieves a previously registered comparator by name.
+    /// Returns true if the comparator is registered, false otherwise.
+    /// </summary>
+    /// <param name="name">The comparator name.</param>
+    /// <returns>True if the comparator is registered.</returns>
+    public bool GetComparator(string name)
+    {
+        ThrowIfDisposed();
+        var result = NativeMethods.tidesdb_get_comparator(_handle, name, out _, out _);
+        return result == 0;
+    }
+
+    /// <summary>
     /// Gets statistics about the block cache.
     /// </summary>
     /// <returns>Cache statistics.</returns>
@@ -236,6 +250,9 @@ public sealed class TidesDb : IDisposable
             NumPartitions = (ulong)nativeStats.NumPartitions
         };
     }
+
+    internal static unsafe NativeColumnFamilyConfig CreateNativeColumnFamilyConfigPublic(ColumnFamilyConfig config)
+        => CreateNativeColumnFamilyConfig(config);
 
     private static unsafe NativeColumnFamilyConfig CreateNativeColumnFamilyConfig(ColumnFamilyConfig config)
     {

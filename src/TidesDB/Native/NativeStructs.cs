@@ -27,6 +27,7 @@ internal struct NativeConfig
     public int LogLevel;
     public nuint BlockCacheSize;
     public nuint MaxOpenSstables;
+    public nuint MaxMemoryUsage;
     public int LogToFile;
     public nuint LogTruncationAt;
 }

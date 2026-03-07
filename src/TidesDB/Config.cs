@@ -52,6 +52,11 @@ public sealed class Config
     public ulong MaxOpenSstables { get; init; } = 256;
 
     /// <summary>
+    /// Global memory limit in bytes (default: 0 = auto, 50% of system RAM; minimum: 5% of system RAM).
+    /// </summary>
+    public ulong MaxMemoryUsage { get; init; } = 0;
+
+    /// <summary>
     /// Flag to determine if debug logging should be written to a file (default: false).
     /// </summary>
     public bool LogToFile { get; init; } = false;

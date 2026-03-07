@@ -852,4 +852,73 @@ public class TidesDBTests : IDisposable
 
         Assert.Equal(costAB, costBA);
     }
+
+    [Fact]
+    public void UpdateRuntimeConfig_ShouldSucceed()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        var newConfig = new ColumnFamilyConfig
+        {
+            WriteBufferSize = 128 * 1024 * 1024,
+            BloomFpr = 0.001,
+            CompressionAlgorithm = CompressionAlgorithm.Zstd,
+        };
+
+        cf.UpdateRuntimeConfig(newConfig);
+    }
+
+    [Fact]
+    public void UpdateRuntimeConfig_WithoutPersist_ShouldSucceed()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        var newConfig = new ColumnFamilyConfig
+        {
+            WriteBufferSize = 256 * 1024 * 1024,
+        };
+
+        cf.UpdateRuntimeConfig(newConfig, persistToDisk: false);
+    }
+
+    [Fact]
+    public void GetComparator_BuiltIn_ShouldReturnTrue()
+    {
+        using var db = OpenDatabase();
+
+        Assert.True(db.GetComparator("memcmp"));
+        Assert.True(db.GetComparator("reverse"));
+    }
+
+    [Fact]
+    public void GetComparator_NonExistent_ShouldReturnFalse()
+    {
+        using var db = OpenDatabase();
+
+        Assert.False(db.GetComparator("nonexistent_comparator"));
+    }
+
+    [Fact]
+    public void ReleaseSavepoint_ShouldSucceed()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        using var txn = db.BeginTransaction();
+
+        txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
+        txn.Savepoint("sp1");
+        txn.Put(cf, Encoding.UTF8.GetBytes("key2"), Encoding.UTF8.GetBytes("value2"));
+        txn.ReleaseSavepoint("sp1");
+        txn.Commit();
+
+        using var readTxn = db.BeginTransaction();
+        Assert.NotNull(readTxn.Get(cf, Encoding.UTF8.GetBytes("key1")));
+        Assert.NotNull(readTxn.Get(cf, Encoding.UTF8.GetBytes("key2")));
+    }
 }
