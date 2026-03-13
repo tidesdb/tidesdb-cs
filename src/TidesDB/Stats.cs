@@ -103,6 +103,87 @@ public sealed record Stats
 }
 
 /// <summary>
+/// Aggregate statistics across the entire database instance.
+/// </summary>
+public sealed class DbStats
+{
+    /// <summary>
+    /// Number of column families.
+    /// </summary>
+    public int NumColumnFamilies { get; init; }
+
+    /// <summary>
+    /// System total memory.
+    /// </summary>
+    public ulong TotalMemory { get; init; }
+
+    /// <summary>
+    /// System available memory at open time.
+    /// </summary>
+    public ulong AvailableMemory { get; init; }
+
+    /// <summary>
+    /// Resolved memory limit (auto or configured).
+    /// </summary>
+    public ulong ResolvedMemoryLimit { get; init; }
+
+    /// <summary>
+    /// Current memory pressure (0=normal, 1=elevated, 2=high, 3=critical).
+    /// </summary>
+    public int MemoryPressureLevel { get; init; }
+
+    /// <summary>
+    /// Number of pending flush operations (queued + in-flight).
+    /// </summary>
+    public int FlushPendingCount { get; init; }
+
+    /// <summary>
+    /// Total bytes in active memtables across all CFs.
+    /// </summary>
+    public long TotalMemtableBytes { get; init; }
+
+    /// <summary>
+    /// Total immutable memtables across all CFs.
+    /// </summary>
+    public int TotalImmutableCount { get; init; }
+
+    /// <summary>
+    /// Total SSTables across all CFs and levels.
+    /// </summary>
+    public int TotalSstableCount { get; init; }
+
+    /// <summary>
+    /// Total data size (klog + vlog) across all CFs.
+    /// </summary>
+    public ulong TotalDataSizeBytes { get; init; }
+
+    /// <summary>
+    /// Number of currently open SSTable file handles.
+    /// </summary>
+    public int NumOpenSstables { get; init; }
+
+    /// <summary>
+    /// Current global sequence number.
+    /// </summary>
+    public ulong GlobalSeq { get; init; }
+
+    /// <summary>
+    /// Bytes held by in-flight transactions.
+    /// </summary>
+    public long TxnMemoryBytes { get; init; }
+
+    /// <summary>
+    /// Number of pending compaction tasks.
+    /// </summary>
+    public ulong CompactionQueueSize { get; init; }
+
+    /// <summary>
+    /// Number of pending flush tasks in queue.
+    /// </summary>
+    public ulong FlushQueueSize { get; init; }
+}
+
+/// <summary>
 /// Statistics about the block cache.
 /// </summary>
 public sealed class CacheStats

@@ -154,6 +154,27 @@ public sealed class ColumnFamily
     }
 
     /// <summary>
+    /// Forces a synchronous flush and aggressive compaction for this column family.
+    /// Unlike FlushMemtable and Compact (which are non-blocking), Purge blocks until
+    /// all flush and compaction I/O is complete.
+    /// </summary>
+    public void Purge()
+    {
+        var result = NativeMethods.tidesdb_purge_cf(Handle);
+        TidesDBException.ThrowIfError(result, "failed to purge column family");
+    }
+
+    /// <summary>
+    /// Forces an immediate fsync of the active write-ahead log for this column family.
+    /// Useful for explicit durability control when using SyncMode.None or SyncMode.Interval.
+    /// </summary>
+    public void SyncWal()
+    {
+        var result = NativeMethods.tidesdb_sync_wal(Handle);
+        TidesDBException.ThrowIfError(result, "failed to sync WAL");
+    }
+
+    /// <summary>
     /// Estimates the computational cost of iterating between two keys.
     /// The returned value is an opaque double — meaningful only for comparison
     /// with other values from the same method. Uses only in-memory metadata

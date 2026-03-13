@@ -229,6 +229,48 @@ public sealed class TidesDb : IDisposable
     }
 
     /// <summary>
+    /// Forces a synchronous flush and aggressive compaction for all column families,
+    /// then drains both the global flush and compaction queues. Blocks until complete.
+    /// </summary>
+    public void Purge()
+    {
+        ThrowIfDisposed();
+        var result = NativeMethods.tidesdb_purge(_handle);
+        TidesDBException.ThrowIfError(result, "failed to purge database");
+    }
+
+    /// <summary>
+    /// Gets aggregate statistics across the entire database instance.
+    /// </summary>
+    /// <returns>Database-level statistics.</returns>
+    public DbStats GetDbStats()
+    {
+        ThrowIfDisposed();
+        var nativeStats = new NativeDbStats();
+        var result = NativeMethods.tidesdb_get_db_stats(_handle, ref nativeStats);
+        TidesDBException.ThrowIfError(result, "failed to get database stats");
+
+        return new DbStats
+        {
+            NumColumnFamilies = nativeStats.NumColumnFamilies,
+            TotalMemory = nativeStats.TotalMemory,
+            AvailableMemory = nativeStats.AvailableMemory,
+            ResolvedMemoryLimit = (ulong)nativeStats.ResolvedMemoryLimit,
+            MemoryPressureLevel = nativeStats.MemoryPressureLevel,
+            FlushPendingCount = nativeStats.FlushPendingCount,
+            TotalMemtableBytes = nativeStats.TotalMemtableBytes,
+            TotalImmutableCount = nativeStats.TotalImmutableCount,
+            TotalSstableCount = nativeStats.TotalSstableCount,
+            TotalDataSizeBytes = nativeStats.TotalDataSizeBytes,
+            NumOpenSstables = nativeStats.NumOpenSstables,
+            GlobalSeq = nativeStats.GlobalSeq,
+            TxnMemoryBytes = nativeStats.TxnMemoryBytes,
+            CompactionQueueSize = (ulong)nativeStats.CompactionQueueSize,
+            FlushQueueSize = (ulong)nativeStats.FlushQueueSize
+        };
+    }
+
+    /// <summary>
     /// Gets statistics about the block cache.
     /// </summary>
     /// <returns>Cache statistics.</returns>
