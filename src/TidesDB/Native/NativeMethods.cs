@@ -177,6 +177,21 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_range_cost")]
     internal static unsafe partial int tidesdb_range_cost(nint cf, byte* keyA, nuint keyASize, byte* keyB, nuint keyBSize, out double cost);
 
+    // Purge operations
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_purge_cf")]
+    internal static partial int tidesdb_purge_cf(nint cf);
+
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_purge")]
+    internal static partial int tidesdb_purge(nint db);
+
+    // WAL sync
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_sync_wal")]
+    internal static partial int tidesdb_sync_wal(nint cf);
+
+    // Database-level statistics
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_get_db_stats")]
+    internal static partial int tidesdb_get_db_stats(nint db, ref NativeDbStats stats);
+
     // Memory operations
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_free")]
     internal static partial void tidesdb_free(nint ptr);

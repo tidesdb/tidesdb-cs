@@ -107,3 +107,23 @@ internal struct NativeCacheStats
     public double HitRate;
     public nuint NumPartitions;
 }
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeDbStats
+{
+    public int NumColumnFamilies;
+    public ulong TotalMemory;
+    public ulong AvailableMemory;
+    public nuint ResolvedMemoryLimit;
+    public int MemoryPressureLevel;
+    public int FlushPendingCount;
+    public long TotalMemtableBytes;
+    public int TotalImmutableCount;
+    public int TotalSstableCount;
+    public ulong TotalDataSizeBytes;
+    public int NumOpenSstables;
+    public ulong GlobalSeq;
+    public long TxnMemoryBytes;
+    public nuint CompactionQueueSize;
+    public nuint FlushQueueSize;
+}
