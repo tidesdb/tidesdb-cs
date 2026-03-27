@@ -181,6 +181,86 @@ public sealed class DbStats
     /// Number of pending flush tasks in queue.
     /// </summary>
     public ulong FlushQueueSize { get; init; }
+
+    /// <summary>
+    /// Whether unified memtable mode is active.
+    /// </summary>
+    public bool UnifiedMemtableEnabled { get; init; }
+
+    /// <summary>
+    /// Bytes in unified active memtable.
+    /// </summary>
+    public long UnifiedMemtableBytes { get; init; }
+
+    /// <summary>
+    /// Number of unified immutable memtables.
+    /// </summary>
+    public int UnifiedImmutableCount { get; init; }
+
+    /// <summary>
+    /// Whether unified memtable is currently flushing/rotating.
+    /// </summary>
+    public bool UnifiedIsFlushing { get; init; }
+
+    /// <summary>
+    /// Next CF index to be assigned in unified mode.
+    /// </summary>
+    public uint UnifiedNextCfIndex { get; init; }
+
+    /// <summary>
+    /// Current unified WAL generation counter.
+    /// </summary>
+    public ulong UnifiedWalGeneration { get; init; }
+
+    /// <summary>
+    /// Whether object store mode is active.
+    /// </summary>
+    public bool ObjectStoreEnabled { get; init; }
+
+    /// <summary>
+    /// Connector name ("s3", "gcs", "fs", etc.), or null if not using object store.
+    /// </summary>
+    public string? ObjectStoreConnector { get; init; }
+
+    /// <summary>
+    /// Current local file cache usage in bytes.
+    /// </summary>
+    public ulong LocalCacheBytesUsed { get; init; }
+
+    /// <summary>
+    /// Configured maximum local cache size in bytes.
+    /// </summary>
+    public ulong LocalCacheBytesMax { get; init; }
+
+    /// <summary>
+    /// Number of files tracked in local cache.
+    /// </summary>
+    public int LocalCacheNumFiles { get; init; }
+
+    /// <summary>
+    /// Highest WAL generation confirmed uploaded.
+    /// </summary>
+    public ulong LastUploadedGeneration { get; init; }
+
+    /// <summary>
+    /// Number of pending upload jobs in the queue.
+    /// </summary>
+    public ulong UploadQueueDepth { get; init; }
+
+    /// <summary>
+    /// Lifetime count of objects uploaded to object store.
+    /// </summary>
+    public ulong TotalUploads { get; init; }
+
+    /// <summary>
+    /// Lifetime count of permanently failed uploads (after all retries).
+    /// </summary>
+    public ulong TotalUploadFailures { get; init; }
+
+    /// <summary>
+    /// Whether running in read-only replica mode.
+    /// </summary>
+    public bool ReplicaMode { get; init; }
 }
 
 /// <summary>

@@ -108,12 +108,19 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_iter_value")]
     internal static partial int tidesdb_iter_value(nint iter, out nint value, out nuint valueSize);
 
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_iter_key_value")]
+    internal static partial int tidesdb_iter_key_value(nint iter, out nint key, out nuint keySize, out nint value, out nuint valueSize);
+
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_iter_free")]
     internal static partial void tidesdb_iter_free(nint iter);
 
     // Transaction reset
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_txn_reset")]
     internal static partial int tidesdb_txn_reset(nint txn, int isolation);
+
+    // Column family delete by pointer
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_delete_column_family")]
+    internal static partial int tidesdb_delete_column_family(nint db, nint cf);
 
     // Column family clone/rename operations
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_clone_column_family", StringMarshalling = StringMarshalling.Utf8)]

@@ -80,5 +80,6 @@ public enum ErrorCode
     MemoryLimit = -9,
     InvalidDb = -10,
     Unknown = -11,
-    Locked = -12
+    Locked = -12,
+    Readonly = -13
 }

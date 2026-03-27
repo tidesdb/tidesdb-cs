@@ -67,6 +67,36 @@ public sealed class Config
     public ulong LogTruncationAt { get; init; } = 0;
 
     /// <summary>
+    /// Enable unified memtable mode (default: false = per-CF memtables).
+    /// </summary>
+    public bool UnifiedMemtable { get; init; } = false;
+
+    /// <summary>
+    /// Unified memtable write buffer size in bytes (default: 0 = auto).
+    /// </summary>
+    public ulong UnifiedMemtableWriteBufferSize { get; init; } = 0;
+
+    /// <summary>
+    /// Skip list max level for unified memtable (default: 0 = 12).
+    /// </summary>
+    public int UnifiedMemtableSkipListMaxLevel { get; init; } = 0;
+
+    /// <summary>
+    /// Skip list probability for unified memtable (default: 0 = 0.25).
+    /// </summary>
+    public float UnifiedMemtableSkipListProbability { get; init; } = 0;
+
+    /// <summary>
+    /// Sync mode for unified WAL (default: None).
+    /// </summary>
+    public SyncMode UnifiedMemtableSyncMode { get; init; } = SyncMode.None;
+
+    /// <summary>
+    /// Sync interval for unified WAL in microseconds (default: 0).
+    /// </summary>
+    public ulong UnifiedMemtableSyncIntervalUs { get; init; } = 0;
+
+    /// <summary>
     /// Creates a default configuration with the specified database path.
     /// </summary>
     public static Config Default(string dbPath) => new()
@@ -184,6 +214,21 @@ public sealed class ColumnFamilyConfig
     /// Use B+tree format for klog (default: false = block-based).
     /// </summary>
     public bool UseBtree { get; init; } = false;
+
+    /// <summary>
+    /// Target SSTable size in object store mode in bytes (default: 0 = auto/256MB).
+    /// </summary>
+    public ulong ObjectTargetFileSize { get; init; } = 0;
+
+    /// <summary>
+    /// Compact less aggressively in object store mode (default: false).
+    /// </summary>
+    public bool ObjectLazyCompaction { get; init; } = false;
+
+    /// <summary>
+    /// Download all inputs before merge in object store mode (default: true).
+    /// </summary>
+    public bool ObjectPrefetchCompaction { get; init; } = true;
 
     /// <summary>
     /// Creates a default column family configuration.
