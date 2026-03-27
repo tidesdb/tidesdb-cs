@@ -1012,6 +1012,173 @@ public class TidesDBTests : IDisposable
     }
 
     [Fact]
+    public void DeleteColumnFamily_ShouldSucceed()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+
+        var cf = db.GetColumnFamily("test_cf");
+        Assert.NotNull(cf);
+
+        db.DeleteColumnFamily(cf);
+
+        var deletedCf = db.GetColumnFamily("test_cf");
+        Assert.Null(deletedCf);
+    }
+
+    [Fact]
+    public void DeleteColumnFamily_ShouldRemoveData()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
+            txn.Commit();
+        }
+
+        db.DeleteColumnFamily(cf);
+
+        var deletedCf = db.GetColumnFamily("test_cf");
+        Assert.Null(deletedCf);
+    }
+
+    [Fact]
+    public void Iterator_KeyValue_ShouldReturnBoth()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
+            txn.Put(cf, Encoding.UTF8.GetBytes("key2"), Encoding.UTF8.GetBytes("value2"));
+            txn.Commit();
+        }
+
+        using var readTxn = db.BeginTransaction();
+        using var iter = readTxn.NewIterator(cf);
+
+        iter.SeekToFirst();
+        Assert.True(iter.Valid());
+
+        var (key, value) = iter.KeyValue();
+        Assert.Equal("key1", Encoding.UTF8.GetString(key));
+        Assert.Equal("value1", Encoding.UTF8.GetString(value));
+
+        iter.Next();
+        Assert.True(iter.Valid());
+
+        var (key2, value2) = iter.KeyValue();
+        Assert.Equal("key2", Encoding.UTF8.GetString(key2));
+        Assert.Equal("value2", Encoding.UTF8.GetString(value2));
+    }
+
+    [Fact]
+    public void Iterator_KeyValue_ForwardIteration_ShouldMatchSeparateCalls()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        using (var txn = db.BeginTransaction())
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                txn.Put(cf, Encoding.UTF8.GetBytes($"key{i:D2}"), Encoding.UTF8.GetBytes($"value{i}"));
+            }
+            txn.Commit();
+        }
+
+        using var readTxn = db.BeginTransaction();
+        using var iter = readTxn.NewIterator(cf);
+
+        iter.SeekToFirst();
+        int count = 0;
+        while (iter.Valid())
+        {
+            var (key, value) = iter.KeyValue();
+            Assert.NotNull(key);
+            Assert.NotNull(value);
+            count++;
+            iter.Next();
+        }
+
+        Assert.Equal(5, count);
+    }
+
+    [Fact]
+    public void GetDbStats_ShouldReturnUnifiedMemtableStats()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+
+        var stats = db.GetDbStats();
+        Assert.NotNull(stats);
+        Assert.False(stats.UnifiedMemtableEnabled);
+        Assert.False(stats.ObjectStoreEnabled);
+        Assert.False(stats.ReplicaMode);
+    }
+
+    [Fact]
+    public void OpenWithUnifiedMemtable_ShouldSucceed()
+    {
+        var testPath = Path.Combine(Path.GetTempPath(), $"tidesdb_unified_{Guid.NewGuid()}");
+        try
+        {
+            var config = new Config
+            {
+                DbPath = testPath,
+                NumFlushThreads = 2,
+                NumCompactionThreads = 2,
+                LogLevel = LogLevel.Info,
+                BlockCacheSize = 64 * 1024 * 1024,
+                MaxOpenSstables = 256,
+                UnifiedMemtable = true,
+                UnifiedMemtableWriteBufferSize = 32 * 1024 * 1024
+            };
+
+            using var db = TidesDb.Open(config);
+            Assert.NotNull(db);
+
+            db.CreateColumnFamily("test_cf");
+            var cf = db.GetColumnFamily("test_cf");
+            Assert.NotNull(cf);
+
+            var stats = db.GetDbStats();
+            Assert.True(stats.UnifiedMemtableEnabled);
+        }
+        finally
+        {
+            if (Directory.Exists(testPath))
+            {
+                Directory.Delete(testPath, true);
+            }
+        }
+    }
+
+    [Fact]
+    public void CreateColumnFamily_WithObjectStoreConfig_ShouldSucceed()
+    {
+        using var db = OpenDatabase();
+        var cfConfig = new ColumnFamilyConfig
+        {
+            WriteBufferSize = 32 * 1024 * 1024,
+            CompressionAlgorithm = CompressionAlgorithm.Lz4,
+            ObjectTargetFileSize = 128 * 1024 * 1024,
+            ObjectLazyCompaction = false,
+            ObjectPrefetchCompaction = true,
+        };
+        db.CreateColumnFamily("test_cf", cfConfig);
+
+        var cf = db.GetColumnFamily("test_cf");
+        Assert.NotNull(cf);
+    }
+
+    [Fact]
     public void ReleaseSavepoint_ShouldSucceed()
     {
         using var db = OpenDatabase();

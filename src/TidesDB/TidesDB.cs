@@ -52,9 +52,17 @@ public sealed class TidesDb : IDisposable
             LogLevel = (int)config.LogLevel,
             BlockCacheSize = (nuint)config.BlockCacheSize,
             MaxOpenSstables = (nuint)config.MaxOpenSstables,
-            MaxMemoryUsage = (nuint)config.MaxMemoryUsage,
             LogToFile = config.LogToFile ? 1 : 0,
-            LogTruncationAt = (nuint)config.LogTruncationAt
+            LogTruncationAt = (nuint)config.LogTruncationAt,
+            MaxMemoryUsage = (nuint)config.MaxMemoryUsage,
+            UnifiedMemtable = config.UnifiedMemtable ? 1 : 0,
+            UnifiedMemtableWriteBufferSize = (nuint)config.UnifiedMemtableWriteBufferSize,
+            UnifiedMemtableSkipListMaxLevel = config.UnifiedMemtableSkipListMaxLevel,
+            UnifiedMemtableSkipListProbability = config.UnifiedMemtableSkipListProbability,
+            UnifiedMemtableSyncMode = (int)config.UnifiedMemtableSyncMode,
+            UnifiedMemtableSyncIntervalUs = config.UnifiedMemtableSyncIntervalUs,
+            ObjectStore = nint.Zero,
+            ObjectStoreConfig = nint.Zero
         };
 
         var result = NativeMethods.tidesdb_open(ref nativeConfig, out var dbHandle);
@@ -91,6 +99,18 @@ public sealed class TidesDb : IDisposable
         ThrowIfDisposed();
         var result = NativeMethods.tidesdb_drop_column_family(_handle, name);
         TidesDBException.ThrowIfError(result, "failed to drop column family");
+    }
+
+    /// <summary>
+    /// Deletes a column family by pointer. Faster than DropColumnFamily when you already
+    /// hold a ColumnFamily handle, as it skips the name lookup.
+    /// </summary>
+    /// <param name="cf">The column family to delete.</param>
+    public void DeleteColumnFamily(ColumnFamily cf)
+    {
+        ThrowIfDisposed();
+        var result = NativeMethods.tidesdb_delete_column_family(_handle, cf.Handle);
+        TidesDBException.ThrowIfError(result, "failed to delete column family");
     }
 
     /// <summary>
@@ -266,7 +286,24 @@ public sealed class TidesDb : IDisposable
             GlobalSeq = nativeStats.GlobalSeq,
             TxnMemoryBytes = nativeStats.TxnMemoryBytes,
             CompactionQueueSize = (ulong)nativeStats.CompactionQueueSize,
-            FlushQueueSize = (ulong)nativeStats.FlushQueueSize
+            FlushQueueSize = (ulong)nativeStats.FlushQueueSize,
+            UnifiedMemtableEnabled = nativeStats.UnifiedMemtableEnabled != 0,
+            UnifiedMemtableBytes = nativeStats.UnifiedMemtableBytes,
+            UnifiedImmutableCount = nativeStats.UnifiedImmutableCount,
+            UnifiedIsFlushing = nativeStats.UnifiedIsFlushing != 0,
+            UnifiedNextCfIndex = nativeStats.UnifiedNextCfIndex,
+            UnifiedWalGeneration = nativeStats.UnifiedWalGeneration,
+            ObjectStoreEnabled = nativeStats.ObjectStoreEnabled != 0,
+            ObjectStoreConnector = nativeStats.ObjectStoreConnector != nint.Zero
+                ? Marshal.PtrToStringAnsi(nativeStats.ObjectStoreConnector) : null,
+            LocalCacheBytesUsed = (ulong)nativeStats.LocalCacheBytesUsed,
+            LocalCacheBytesMax = (ulong)nativeStats.LocalCacheBytesMax,
+            LocalCacheNumFiles = nativeStats.LocalCacheNumFiles,
+            LastUploadedGeneration = nativeStats.LastUploadedGeneration,
+            UploadQueueDepth = (ulong)nativeStats.UploadQueueDepth,
+            TotalUploads = nativeStats.TotalUploads,
+            TotalUploadFailures = nativeStats.TotalUploadFailures,
+            ReplicaMode = nativeStats.ReplicaMode != 0
         };
     }
 
@@ -322,6 +359,9 @@ public sealed class TidesDb : IDisposable
             UseBtree = config.UseBtree ? 1 : 0,
             CommitHookFn = nint.Zero,
             CommitHookCtx = nint.Zero,
+            ObjectTargetFileSize = (nuint)config.ObjectTargetFileSize,
+            ObjectLazyCompaction = config.ObjectLazyCompaction ? 1 : 0,
+            ObjectPrefetchCompaction = config.ObjectPrefetchCompaction ? 1 : 0,
             ComparatorFnCached = nint.Zero,
             ComparatorCtxCached = nint.Zero
         };

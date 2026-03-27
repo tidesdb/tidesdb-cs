@@ -53,6 +53,7 @@ public class TidesDBException : Exception
             ErrorCode.MemoryLimit => "memory limit exceeded",
             ErrorCode.InvalidDb => "invalid database handle",
             ErrorCode.Locked => "database is locked",
+            ErrorCode.Readonly => "database is read-only",
             _ => "unknown error"
         };
 

@@ -136,6 +136,26 @@ public sealed class Iterator : IDisposable
     }
 
     /// <summary>
+    /// Gets both the current key and value in a single call.
+    /// More efficient than calling Key() and Value() separately.
+    /// </summary>
+    public (byte[] Key, byte[] Value) KeyValue()
+    {
+        ThrowIfDisposed();
+        var result = NativeMethods.tidesdb_iter_key_value(
+            _handle, out var keyPtr, out var keySize, out var valuePtr, out var valueSize);
+        TidesDBException.ThrowIfError(result, "failed to get key-value pair");
+
+        var key = new byte[(int)keySize];
+        Marshal.Copy(keyPtr, key, 0, (int)keySize);
+
+        var value = new byte[(int)valueSize];
+        Marshal.Copy(valuePtr, value, 0, (int)valueSize);
+
+        return (key, value);
+    }
+
+    /// <summary>
     /// Gets the current value.
     /// </summary>
     public byte[] Value()

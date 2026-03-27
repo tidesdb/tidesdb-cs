@@ -27,9 +27,17 @@ internal struct NativeConfig
     public int LogLevel;
     public nuint BlockCacheSize;
     public nuint MaxOpenSstables;
-    public nuint MaxMemoryUsage;
     public int LogToFile;
     public nuint LogTruncationAt;
+    public nuint MaxMemoryUsage;
+    public int UnifiedMemtable;
+    public nuint UnifiedMemtableWriteBufferSize;
+    public int UnifiedMemtableSkipListMaxLevel;
+    public float UnifiedMemtableSkipListProbability;
+    public int UnifiedMemtableSyncMode;
+    public ulong UnifiedMemtableSyncIntervalUs;
+    public nint ObjectStore;
+    public nint ObjectStoreConfig;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -62,6 +70,9 @@ internal unsafe struct NativeColumnFamilyConfig
     public int UseBtree;
     public nint CommitHookFn;
     public nint CommitHookCtx;
+    public nuint ObjectTargetFileSize;
+    public int ObjectLazyCompaction;
+    public int ObjectPrefetchCompaction;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -82,12 +93,12 @@ internal struct NativeStats
     public nuint MemtableSize;
     public nint LevelSizes;
     public nint LevelNumSstables;
-    public nint LevelKeyCounts;
     public nint Config;
     public ulong TotalKeys;
     public ulong TotalDataSize;
     public double AvgKeySize;
     public double AvgValueSize;
+    public nint LevelKeyCounts;
     public double ReadAmp;
     public double HitRate;
     public int UseBtree;
@@ -126,4 +137,20 @@ internal struct NativeDbStats
     public long TxnMemoryBytes;
     public nuint CompactionQueueSize;
     public nuint FlushQueueSize;
+    public int UnifiedMemtableEnabled;
+    public long UnifiedMemtableBytes;
+    public int UnifiedImmutableCount;
+    public int UnifiedIsFlushing;
+    public uint UnifiedNextCfIndex;
+    public ulong UnifiedWalGeneration;
+    public int ObjectStoreEnabled;
+    public nint ObjectStoreConnector;
+    public nuint LocalCacheBytesUsed;
+    public nuint LocalCacheBytesMax;
+    public int LocalCacheNumFiles;
+    public ulong LastUploadedGeneration;
+    public nuint UploadQueueDepth;
+    public ulong TotalUploads;
+    public ulong TotalUploadFailures;
+    public int ReplicaMode;
 }
