@@ -28,11 +28,17 @@ public sealed class TidesDb : IDisposable
     private nint _handle;
     private bool _disposed;
     private nint _dbPathPtr;
+    private nint _objStorePtr;
+    private nint _objStoreConfigPtr;
+    private nint _localCachePathPtr;
 
-    private TidesDb(nint handle, nint dbPathPtr)
+    private TidesDb(nint handle, nint dbPathPtr, nint objStorePtr, nint objStoreConfigPtr, nint localCachePathPtr)
     {
         _handle = handle;
         _dbPathPtr = dbPathPtr;
+        _objStorePtr = objStorePtr;
+        _objStoreConfigPtr = objStoreConfigPtr;
+        _localCachePathPtr = localCachePathPtr;
     }
 
     /// <summary>
@@ -43,36 +49,89 @@ public sealed class TidesDb : IDisposable
     public static TidesDb Open(Config config)
     {
         var dbPathPtr = Marshal.StringToHGlobalAnsi(config.DbPath);
-        
-        var nativeConfig = new NativeConfig
-        {
-            DbPath = dbPathPtr,
-            NumFlushThreads = config.NumFlushThreads,
-            NumCompactionThreads = config.NumCompactionThreads,
-            LogLevel = (int)config.LogLevel,
-            BlockCacheSize = (nuint)config.BlockCacheSize,
-            MaxOpenSstables = (nuint)config.MaxOpenSstables,
-            LogToFile = config.LogToFile ? 1 : 0,
-            LogTruncationAt = (nuint)config.LogTruncationAt,
-            MaxMemoryUsage = (nuint)config.MaxMemoryUsage,
-            UnifiedMemtable = config.UnifiedMemtable ? 1 : 0,
-            UnifiedMemtableWriteBufferSize = (nuint)config.UnifiedMemtableWriteBufferSize,
-            UnifiedMemtableSkipListMaxLevel = config.UnifiedMemtableSkipListMaxLevel,
-            UnifiedMemtableSkipListProbability = config.UnifiedMemtableSkipListProbability,
-            UnifiedMemtableSyncMode = (int)config.UnifiedMemtableSyncMode,
-            UnifiedMemtableSyncIntervalUs = config.UnifiedMemtableSyncIntervalUs,
-            ObjectStore = nint.Zero,
-            ObjectStoreConfig = nint.Zero
-        };
+        var objStorePtr = nint.Zero;
+        var objStoreConfigPtr = nint.Zero;
+        var localCachePathPtr = nint.Zero;
 
-        var result = NativeMethods.tidesdb_open(ref nativeConfig, out var dbHandle);
-        if (result != 0)
+        try
+        {
+            if (config.ObjectStoreConfig is { } osCfg)
+            {
+                objStorePtr = osCfg.ConnectorType switch
+                {
+                    ObjectStoreConnectorType.Filesystem =>
+                        NativeMethods.tidesdb_objstore_fs_create(
+                            osCfg.FsRootDir ?? throw new ArgumentException("FsRootDir is required for filesystem connector")),
+                    ObjectStoreConnectorType.S3 =>
+                        throw new NotSupportedException("S3 connector requires native tidesdb_objstore_s3_create which is not yet exposed in the C# binding. Use the C API directly or contribute S3 support."),
+                    _ => throw new ArgumentException($"Unknown connector type: {osCfg.ConnectorType}")
+                };
+
+                if (objStorePtr == nint.Zero)
+                    throw new TidesDBException(-1, "failed to create object store connector");
+
+                var nativeOsCfg = NativeMethods.tidesdb_objstore_default_config();
+
+                if (osCfg.LocalCachePath != null)
+                {
+                    localCachePathPtr = Marshal.StringToHGlobalAnsi(osCfg.LocalCachePath);
+                    nativeOsCfg.LocalCachePath = localCachePathPtr;
+                }
+
+                nativeOsCfg.LocalCacheMaxBytes = (nuint)osCfg.LocalCacheMaxBytes;
+                nativeOsCfg.CacheOnRead = osCfg.CacheOnRead ? 1 : 0;
+                nativeOsCfg.CacheOnWrite = osCfg.CacheOnWrite ? 1 : 0;
+                nativeOsCfg.MaxConcurrentUploads = osCfg.MaxConcurrentUploads;
+                nativeOsCfg.MaxConcurrentDownloads = osCfg.MaxConcurrentDownloads;
+                nativeOsCfg.MultipartThreshold = (nuint)osCfg.MultipartThreshold;
+                nativeOsCfg.MultipartPartSize = (nuint)osCfg.MultipartPartSize;
+                nativeOsCfg.SyncManifestToObject = osCfg.SyncManifestToObject ? 1 : 0;
+                nativeOsCfg.ReplicateWal = osCfg.ReplicateWal ? 1 : 0;
+                nativeOsCfg.WalUploadSync = osCfg.WalUploadSync ? 1 : 0;
+                nativeOsCfg.WalSyncThresholdBytes = (nuint)osCfg.WalSyncThresholdBytes;
+                nativeOsCfg.WalSyncOnCommit = osCfg.WalSyncOnCommit ? 1 : 0;
+                nativeOsCfg.ReplicaMode = osCfg.ReplicaMode ? 1 : 0;
+                nativeOsCfg.ReplicaSyncIntervalUs = osCfg.ReplicaSyncIntervalUs;
+                nativeOsCfg.ReplicaReplayWal = osCfg.ReplicaReplayWal ? 1 : 0;
+
+                objStoreConfigPtr = Marshal.AllocHGlobal(Marshal.SizeOf<NativeObjStoreConfig>());
+                Marshal.StructureToPtr(nativeOsCfg, objStoreConfigPtr, false);
+            }
+
+            var nativeConfig = new NativeConfig
+            {
+                DbPath = dbPathPtr,
+                NumFlushThreads = config.NumFlushThreads,
+                NumCompactionThreads = config.NumCompactionThreads,
+                LogLevel = (int)config.LogLevel,
+                BlockCacheSize = (nuint)config.BlockCacheSize,
+                MaxOpenSstables = (nuint)config.MaxOpenSstables,
+                LogToFile = config.LogToFile ? 1 : 0,
+                LogTruncationAt = (nuint)config.LogTruncationAt,
+                MaxMemoryUsage = (nuint)config.MaxMemoryUsage,
+                UnifiedMemtable = config.UnifiedMemtable ? 1 : 0,
+                UnifiedMemtableWriteBufferSize = (nuint)config.UnifiedMemtableWriteBufferSize,
+                UnifiedMemtableSkipListMaxLevel = config.UnifiedMemtableSkipListMaxLevel,
+                UnifiedMemtableSkipListProbability = config.UnifiedMemtableSkipListProbability,
+                UnifiedMemtableSyncMode = (int)config.UnifiedMemtableSyncMode,
+                UnifiedMemtableSyncIntervalUs = config.UnifiedMemtableSyncIntervalUs,
+                ObjectStore = objStorePtr,
+                ObjectStoreConfig = objStoreConfigPtr
+            };
+
+            var result = NativeMethods.tidesdb_open(ref nativeConfig, out var dbHandle);
+            if (result != 0)
+                throw new TidesDBException(result, "failed to open database");
+
+            return new TidesDb(dbHandle, dbPathPtr, objStorePtr, objStoreConfigPtr, localCachePathPtr);
+        }
+        catch
         {
             Marshal.FreeHGlobal(dbPathPtr);
-            throw new TidesDBException(result, "failed to open database");
+            if (localCachePathPtr != nint.Zero) Marshal.FreeHGlobal(localCachePathPtr);
+            if (objStoreConfigPtr != nint.Zero) Marshal.FreeHGlobal(objStoreConfigPtr);
+            throw;
         }
-
-        return new TidesDb(dbHandle, dbPathPtr);
     }
 
     /// <summary>
@@ -249,6 +308,17 @@ public sealed class TidesDb : IDisposable
     }
 
     /// <summary>
+    /// Promotes a read-only replica to primary mode, enabling writes.
+    /// Performs a final MANIFEST sync and WAL replay before switching.
+    /// </summary>
+    public void PromoteToPrimary()
+    {
+        ThrowIfDisposed();
+        var result = NativeMethods.tidesdb_promote_to_primary(_handle);
+        TidesDBException.ThrowIfError(result, "failed to promote to primary");
+    }
+
+    /// <summary>
     /// Forces a synchronous flush and aggressive compaction for all column families,
     /// then drains both the global flush and compaction queues. Blocks until complete.
     /// </summary>
@@ -400,6 +470,18 @@ public sealed class TidesDb : IDisposable
         {
             Marshal.FreeHGlobal(_dbPathPtr);
             _dbPathPtr = nint.Zero;
+        }
+
+        if (_localCachePathPtr != nint.Zero)
+        {
+            Marshal.FreeHGlobal(_localCachePathPtr);
+            _localCachePathPtr = nint.Zero;
+        }
+
+        if (_objStoreConfigPtr != nint.Zero)
+        {
+            Marshal.FreeHGlobal(_objStoreConfigPtr);
+            _objStoreConfigPtr = nint.Zero;
         }
     }
 }

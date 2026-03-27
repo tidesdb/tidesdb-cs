@@ -41,6 +41,27 @@ internal struct NativeConfig
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal struct NativeObjStoreConfig
+{
+    public nint LocalCachePath;
+    public nuint LocalCacheMaxBytes;
+    public int CacheOnRead;
+    public int CacheOnWrite;
+    public int MaxConcurrentUploads;
+    public int MaxConcurrentDownloads;
+    public nuint MultipartThreshold;
+    public nuint MultipartPartSize;
+    public int SyncManifestToObject;
+    public int ReplicateWal;
+    public int WalUploadSync;
+    public nuint WalSyncThresholdBytes;
+    public int WalSyncOnCommit;
+    public int ReplicaMode;
+    public ulong ReplicaSyncIntervalUs;
+    public int ReplicaReplayWal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal unsafe struct NativeColumnFamilyConfig
 {
     public fixed byte Name[128];

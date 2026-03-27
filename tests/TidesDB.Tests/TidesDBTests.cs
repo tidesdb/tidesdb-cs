@@ -1197,4 +1197,174 @@ public class TidesDBTests : IDisposable
         Assert.NotNull(readTxn.Get(cf, Encoding.UTF8.GetBytes("key1")));
         Assert.NotNull(readTxn.Get(cf, Encoding.UTF8.GetBytes("key2")));
     }
+
+    [Fact]
+    public void OpenWithObjectStore_Filesystem_ShouldSucceed()
+    {
+        var objStoreDir = Path.Combine(Path.GetTempPath(), $"tidesdb_objstore_{Guid.NewGuid()}");
+        Directory.CreateDirectory(objStoreDir);
+
+        try
+        {
+            var config = new Config
+            {
+                DbPath = _testDbPath,
+                NumFlushThreads = 1,
+                NumCompactionThreads = 1,
+                LogLevel = LogLevel.Info,
+                BlockCacheSize = 64 * 1024 * 1024,
+                MaxOpenSstables = 256,
+                ObjectStoreConfig = new ObjectStoreConfig
+                {
+                    ConnectorType = ObjectStoreConnectorType.Filesystem,
+                    FsRootDir = objStoreDir,
+                    LocalCacheMaxBytes = 128 * 1024 * 1024,
+                    MaxConcurrentUploads = 4,
+                    MaxConcurrentDownloads = 8,
+                },
+            };
+
+            using var db = TidesDb.Open(config);
+            _db = db;
+            Assert.NotNull(db);
+
+            db.CreateColumnFamily("test_cf");
+            var cf = db.GetColumnFamily("test_cf");
+            Assert.NotNull(cf);
+
+            using var txn = db.BeginTransaction();
+            txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
+            txn.Commit();
+
+            using var readTxn = db.BeginTransaction();
+            var result = readTxn.Get(cf, Encoding.UTF8.GetBytes("key1"));
+            Assert.NotNull(result);
+            Assert.Equal("value1", Encoding.UTF8.GetString(result));
+        }
+        finally
+        {
+            if (Directory.Exists(objStoreDir))
+                Directory.Delete(objStoreDir, true);
+        }
+    }
+
+    [Fact]
+    public void OpenWithObjectStore_DbStats_ShouldShowObjectStoreEnabled()
+    {
+        var objStoreDir = Path.Combine(Path.GetTempPath(), $"tidesdb_objstore_{Guid.NewGuid()}");
+        Directory.CreateDirectory(objStoreDir);
+
+        try
+        {
+            var config = new Config
+            {
+                DbPath = _testDbPath,
+                NumFlushThreads = 1,
+                NumCompactionThreads = 1,
+                LogLevel = LogLevel.Info,
+                BlockCacheSize = 64 * 1024 * 1024,
+                MaxOpenSstables = 256,
+                ObjectStoreConfig = new ObjectStoreConfig
+                {
+                    ConnectorType = ObjectStoreConnectorType.Filesystem,
+                    FsRootDir = objStoreDir,
+                },
+            };
+
+            using var db = TidesDb.Open(config);
+            _db = db;
+
+            var dbStats = db.GetDbStats();
+            Assert.True(dbStats.ObjectStoreEnabled);
+            Assert.NotNull(dbStats.ObjectStoreConnector);
+        }
+        finally
+        {
+            if (Directory.Exists(objStoreDir))
+                Directory.Delete(objStoreDir, true);
+        }
+    }
+
+    [Fact]
+    public void ObjectStoreConfig_RequiresFsRootDir()
+    {
+        var config = new Config
+        {
+            DbPath = _testDbPath,
+            ObjectStoreConfig = new ObjectStoreConfig
+            {
+                ConnectorType = ObjectStoreConnectorType.Filesystem,
+                // FsRootDir not set
+            },
+        };
+
+        Assert.Throws<ArgumentException>(() => TidesDb.Open(config));
+    }
+
+    [Fact]
+    public void OpenWithObjectStore_ReplicaMode_ShouldRejectWrites()
+    {
+        var objStoreDir = Path.Combine(Path.GetTempPath(), $"tidesdb_objstore_{Guid.NewGuid()}");
+        Directory.CreateDirectory(objStoreDir);
+
+        try
+        {
+            // First open as primary and create a CF
+            var primaryConfig = new Config
+            {
+                DbPath = _testDbPath,
+                NumFlushThreads = 1,
+                NumCompactionThreads = 1,
+                LogLevel = LogLevel.Info,
+                ObjectStoreConfig = new ObjectStoreConfig
+                {
+                    ConnectorType = ObjectStoreConnectorType.Filesystem,
+                    FsRootDir = objStoreDir,
+                },
+            };
+
+            using (var primaryDb = TidesDb.Open(primaryConfig))
+            {
+                primaryDb.CreateColumnFamily("test_cf");
+                var cf = primaryDb.GetColumnFamily("test_cf")!;
+                using var txn = primaryDb.BeginTransaction();
+                txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
+                txn.Commit();
+            }
+
+            // Open as replica
+            var replicaDbPath = Path.Combine(Path.GetTempPath(), $"tidesdb_replica_{Guid.NewGuid()}");
+            var replicaConfig = new Config
+            {
+                DbPath = replicaDbPath,
+                NumFlushThreads = 1,
+                NumCompactionThreads = 1,
+                LogLevel = LogLevel.Info,
+                ObjectStoreConfig = new ObjectStoreConfig
+                {
+                    ConnectorType = ObjectStoreConnectorType.Filesystem,
+                    FsRootDir = objStoreDir,
+                    ReplicaMode = true,
+                    ReplicaSyncIntervalUs = 1_000_000,
+                },
+            };
+
+            try
+            {
+                using var replicaDb = TidesDb.Open(replicaConfig);
+                var dbStats = replicaDb.GetDbStats();
+                Assert.True(dbStats.ReplicaMode);
+            }
+            finally
+            {
+                if (Directory.Exists(replicaDbPath))
+                    Directory.Delete(replicaDbPath, true);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(objStoreDir))
+                Directory.Delete(objStoreDir, true);
+        }
+    }
 }

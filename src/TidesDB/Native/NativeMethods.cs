@@ -202,4 +202,15 @@ internal static partial class NativeMethods
     // Memory operations
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_free")]
     internal static partial void tidesdb_free(nint ptr);
+
+    // Object store operations
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_objstore_fs_create", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial nint tidesdb_objstore_fs_create(string rootDir);
+
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_objstore_default_config")]
+    internal static partial NativeObjStoreConfig tidesdb_objstore_default_config();
+
+    // Replica promotion
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_promote_to_primary")]
+    internal static partial int tidesdb_promote_to_primary(nint db);
 }
