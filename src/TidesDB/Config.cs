@@ -97,6 +97,12 @@ public sealed class Config
     public ulong UnifiedMemtableSyncIntervalUs { get; init; } = 0;
 
     /// <summary>
+    /// Object store behavior configuration (null = object store disabled).
+    /// Setting this automatically enables unified memtable mode.
+    /// </summary>
+    public ObjectStoreConfig? ObjectStoreConfig { get; init; }
+
+    /// <summary>
     /// Creates a default configuration with the specified database path.
     /// </summary>
     public static Config Default(string dbPath) => new()
@@ -234,4 +240,164 @@ public sealed class ColumnFamilyConfig
     /// Creates a default column family configuration.
     /// </summary>
     public static ColumnFamilyConfig Default => new();
+}
+
+/// <summary>
+/// Configuration for object store mode behavior.
+/// </summary>
+public sealed class ObjectStoreConfig
+{
+    /// <summary>
+    /// Object store connector type (default: Filesystem).
+    /// </summary>
+    public ObjectStoreConnectorType ConnectorType { get; init; } = ObjectStoreConnectorType.Filesystem;
+
+    /// <summary>
+    /// Root directory for the filesystem connector.
+    /// Required when ConnectorType is Filesystem.
+    /// </summary>
+    public string? FsRootDir { get; init; }
+
+    /// <summary>
+    /// S3 endpoint (e.g., "s3.amazonaws.com" or "localhost:9000" for MinIO).
+    /// Required when ConnectorType is S3.
+    /// </summary>
+    public string? S3Endpoint { get; init; }
+
+    /// <summary>
+    /// S3 bucket name. Required when ConnectorType is S3.
+    /// </summary>
+    public string? S3Bucket { get; init; }
+
+    /// <summary>
+    /// S3 key prefix (optional, e.g., "production/db1/").
+    /// </summary>
+    public string? S3KeyPrefix { get; init; }
+
+    /// <summary>
+    /// S3 access key. Required when ConnectorType is S3.
+    /// </summary>
+    public string? S3AccessKey { get; init; }
+
+    /// <summary>
+    /// S3 secret key. Required when ConnectorType is S3.
+    /// </summary>
+    public string? S3SecretKey { get; init; }
+
+    /// <summary>
+    /// S3 region (e.g., "us-east-1"). Can be null for MinIO.
+    /// </summary>
+    public string? S3Region { get; init; }
+
+    /// <summary>
+    /// Use SSL (HTTPS) for S3 connections (default: true).
+    /// </summary>
+    public bool S3UseSsl { get; init; } = true;
+
+    /// <summary>
+    /// Use path-style URLs for S3 (default: false for AWS, set true for MinIO).
+    /// </summary>
+    public bool S3UsePathStyle { get; init; } = false;
+
+    /// <summary>
+    /// Local directory for cached SSTable files (null = use db_path).
+    /// </summary>
+    public string? LocalCachePath { get; init; }
+
+    /// <summary>
+    /// Maximum local cache size in bytes (default: 0 = unlimited).
+    /// </summary>
+    public ulong LocalCacheMaxBytes { get; init; } = 0;
+
+    /// <summary>
+    /// Cache downloaded files locally (default: true).
+    /// </summary>
+    public bool CacheOnRead { get; init; } = true;
+
+    /// <summary>
+    /// Keep local copy after upload (default: true).
+    /// </summary>
+    public bool CacheOnWrite { get; init; } = true;
+
+    /// <summary>
+    /// Number of parallel upload threads (default: 4).
+    /// </summary>
+    public int MaxConcurrentUploads { get; init; } = 4;
+
+    /// <summary>
+    /// Number of parallel download threads (default: 8).
+    /// </summary>
+    public int MaxConcurrentDownloads { get; init; } = 8;
+
+    /// <summary>
+    /// Use multipart upload above this size in bytes (default: 64MB).
+    /// </summary>
+    public ulong MultipartThreshold { get; init; } = 64 * 1024 * 1024;
+
+    /// <summary>
+    /// Chunk size for multipart uploads in bytes (default: 8MB).
+    /// </summary>
+    public ulong MultipartPartSize { get; init; } = 8 * 1024 * 1024;
+
+    /// <summary>
+    /// Upload MANIFEST after each compaction (default: true).
+    /// </summary>
+    public bool SyncManifestToObject { get; init; } = true;
+
+    /// <summary>
+    /// Upload closed WAL segments for replication (default: true).
+    /// </summary>
+    public bool ReplicateWal { get; init; } = true;
+
+    /// <summary>
+    /// Block flush until WAL is uploaded (default: false = background upload).
+    /// </summary>
+    public bool WalUploadSync { get; init; } = false;
+
+    /// <summary>
+    /// Sync active WAL when it grows by this many bytes (default: 1MB, 0 = off).
+    /// </summary>
+    public ulong WalSyncThresholdBytes { get; init; } = 1024 * 1024;
+
+    /// <summary>
+    /// Upload WAL after every txn commit for RPO=0 replication (default: false).
+    /// </summary>
+    public bool WalSyncOnCommit { get; init; } = false;
+
+    /// <summary>
+    /// Enable read-only replica mode (default: false).
+    /// </summary>
+    public bool ReplicaMode { get; init; } = false;
+
+    /// <summary>
+    /// MANIFEST poll interval for replica sync in microseconds (default: 5000000 = 5s).
+    /// </summary>
+    public ulong ReplicaSyncIntervalUs { get; init; } = 5_000_000;
+
+    /// <summary>
+    /// Replay WAL from object store for near-real-time reads on replicas (default: true).
+    /// </summary>
+    public bool ReplicaReplayWal { get; init; } = true;
+
+    /// <summary>
+    /// Creates a default object store configuration.
+    /// </summary>
+    public static ObjectStoreConfig Default => new();
+}
+
+/// <summary>
+/// Object store connector types.
+/// </summary>
+public enum ObjectStoreConnectorType
+{
+    /// <summary>
+    /// Filesystem-backed object store (for testing and local replication).
+    /// </summary>
+    Filesystem = 0,
+
+    /// <summary>
+    /// S3-compatible object store (AWS S3, MinIO, GCS with S3 compatibility).
+    /// Requires TidesDB built with -DTIDESDB_WITH_S3=ON.
+    /// </summary>
+    S3 = 1
 }
