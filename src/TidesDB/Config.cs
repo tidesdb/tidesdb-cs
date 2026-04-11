@@ -222,8 +222,9 @@ public sealed class ColumnFamilyConfig
     public bool UseBtree { get; init; } = false;
 
     /// <summary>
-    /// Target SSTable size in object store mode in bytes (default: 0 = auto/256MB).
+    /// Reserved for ABI compatibility. Not used by TidesDB.
     /// </summary>
+    [Obsolete("Setting this property has no effect. TidesDB ignores this value. Will be removed in a future version.")]
     public ulong ObjectTargetFileSize { get; init; } = 0;
 
     /// <summary>
