@@ -429,7 +429,7 @@ public sealed class TidesDb : IDisposable
             UseBtree = config.UseBtree ? 1 : 0,
             CommitHookFn = nint.Zero,
             CommitHookCtx = nint.Zero,
-            ObjectTargetFileSize = (nuint)config.ObjectTargetFileSize,
+            ObjectTargetFileSize = 0,
             ObjectLazyCompaction = config.ObjectLazyCompaction ? 1 : 0,
             ObjectPrefetchCompaction = config.ObjectPrefetchCompaction ? 1 : 0,
             ComparatorFnCached = nint.Zero,

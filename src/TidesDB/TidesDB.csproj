@@ -6,22 +6,34 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>latest</LangVersion>
-    
+
     <!-- Package metadata -->
     <PackageId>TidesDB</PackageId>
-    <Version>0.4.7</Version>
+    <Version>0.5.0</Version>
     <Authors>TidesDB</Authors>
     <Company>TidesDB</Company>
-    <Description>Official C# bindings for TidesDB - A high-performance embedded key-value storage engine</Description>
+    <Description>Official C# bindings for TidesDB, a high-performance embedded key-value storage engine. Wraps the native libtidesdb shared library, which must be installed on the target system.</Description>
     <PackageLicenseExpression>MPL-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/tidesdb/tidesdb-cs</PackageProjectUrl>
     <RepositoryUrl>https://github.com/tidesdb/tidesdb-cs</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <PackageTags>tidesdb;database;key-value;lsm-tree;embedded;storage</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- Symbols and SourceLink -->
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <DebugType>portable</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 
 </Project>

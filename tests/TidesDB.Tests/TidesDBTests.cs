@@ -159,6 +159,80 @@ public class TidesDBTests : IDisposable
     }
 
     [Fact]
+    public void SingleDelete_ShouldRemoveKey()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        var key = Encoding.UTF8.GetBytes("single_key");
+        var value = Encoding.UTF8.GetBytes("single_value");
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Put(cf, key, value);
+            txn.Commit();
+        }
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.SingleDelete(cf, key);
+            txn.Commit();
+        }
+
+        using var readTxn = db.BeginTransaction();
+        var result = readTxn.Get(cf, key);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void SingleDelete_WithinTransaction_ShouldSucceed()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        var keyA = Encoding.UTF8.GetBytes("key_a");
+        var keyB = Encoding.UTF8.GetBytes("key_b");
+        var value = Encoding.UTF8.GetBytes("value");
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.Put(cf, keyA, value);
+            txn.Put(cf, keyB, value);
+            txn.Commit();
+        }
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.SingleDelete(cf, keyA);
+            txn.Commit();
+        }
+
+        using var readTxn = db.BeginTransaction();
+        Assert.Null(readTxn.Get(cf, keyA));
+        Assert.NotNull(readTxn.Get(cf, keyB));
+    }
+
+    [Fact]
+    public void SingleDelete_OnMissingKey_ShouldSucceed()
+    {
+        using var db = OpenDatabase();
+        db.CreateColumnFamily("test_cf");
+        var cf = db.GetColumnFamily("test_cf")!;
+
+        using (var txn = db.BeginTransaction())
+        {
+            txn.SingleDelete(cf, Encoding.UTF8.GetBytes("never_existed"));
+            txn.Commit();
+        }
+
+        using var readTxn = db.BeginTransaction();
+        var result = readTxn.Get(cf, Encoding.UTF8.GetBytes("never_existed"));
+        Assert.Null(result);
+    }
+
+    [Fact]
     public void Transaction_Rollback_ShouldDiscardChanges()
     {
         using var db = OpenDatabase();
@@ -1168,7 +1242,6 @@ public class TidesDBTests : IDisposable
         {
             WriteBufferSize = 32 * 1024 * 1024,
             CompressionAlgorithm = CompressionAlgorithm.Lz4,
-            ObjectTargetFileSize = 128 * 1024 * 1024,
             ObjectLazyCompaction = false,
             ObjectPrefetchCompaction = true,
         };
