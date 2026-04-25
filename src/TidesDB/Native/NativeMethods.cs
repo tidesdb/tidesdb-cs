@@ -58,6 +58,9 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_txn_delete")]
     internal static unsafe partial int tidesdb_txn_delete(nint txn, nint cf, byte* key, nuint keySize);
 
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_txn_single_delete")]
+    internal static unsafe partial int tidesdb_txn_single_delete(nint txn, nint cf, byte* key, nuint keySize);
+
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_txn_commit")]
     internal static partial int tidesdb_txn_commit(nint txn);
 

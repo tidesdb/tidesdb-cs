@@ -117,6 +117,32 @@ public sealed class Transaction : IDisposable
     }
 
     /// <summary>
+    /// Writes a single-delete tombstone for a key. Read semantics match <see cref="Delete"/>,
+    /// but the caller promises the key was put at most once between any two single-deletes
+    /// (and between the start of history and the first single-delete) so compaction can drop
+    /// the put and tombstone together as soon as both appear in the same merge input.
+    /// Use only for insert-once/delete-once workloads. Violating the promise can leave older
+    /// puts visible after the single-delete and is a caller bug. When in doubt, use Delete.
+    /// </summary>
+    /// <param name="cf">The column family.</param>
+    /// <param name="key">The key.</param>
+    public void SingleDelete(ColumnFamily cf, ReadOnlySpan<byte> key)
+    {
+        ThrowIfDisposed();
+        int result;
+        unsafe
+        {
+            fixed (byte* keyPtr = key)
+            {
+                result = NativeMethods.tidesdb_txn_single_delete(
+                    _handle, cf.Handle,
+                    keyPtr, (nuint)key.Length);
+            }
+        }
+        TidesDBException.ThrowIfError(result, "failed to single-delete key");
+    }
+
+    /// <summary>
     /// Commits the transaction.
     /// </summary>
     public void Commit()

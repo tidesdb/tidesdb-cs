@@ -91,6 +91,7 @@ internal unsafe struct NativeColumnFamilyConfig
     public int UseBtree;
     public nint CommitHookFn;
     public nint CommitHookCtx;
+    // reserved field in db.h, retained for struct alignment with the C ABI; always 0
     public nuint ObjectTargetFileSize;
     public int ObjectLazyCompaction;
     public int ObjectPrefetchCompaction;

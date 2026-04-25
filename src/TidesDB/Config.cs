@@ -222,12 +222,6 @@ public sealed class ColumnFamilyConfig
     public bool UseBtree { get; init; } = false;
 
     /// <summary>
-    /// Reserved for ABI compatibility. Not used by TidesDB.
-    /// </summary>
-    [Obsolete("Setting this property has no effect. TidesDB ignores this value. Will be removed in a future version.")]
-    public ulong ObjectTargetFileSize { get; init; } = 0;
-
-    /// <summary>
     /// Compact less aggressively in object store mode (default: false).
     /// </summary>
     public bool ObjectLazyCompaction { get; init; } = false;
