@@ -176,7 +176,7 @@ public sealed class ColumnFamily
 
     /// <summary>
     /// Estimates the computational cost of iterating between two keys.
-    /// The returned value is an opaque double — meaningful only for comparison
+    /// The returned value is an opaque double - meaningful only for comparison
     /// with other values from the same method. Uses only in-memory metadata
     /// and performs no disk I/O. Key order does not matter.
     /// </summary>
