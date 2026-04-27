@@ -1440,4 +1440,133 @@ public class TidesDBTests : IDisposable
                 Directory.Delete(objStoreDir, true);
         }
     }
+
+    [Fact]
+    public void TombstoneCfConfig_RoundTrip_ShouldPreserveValues()
+    {
+        using var db = OpenDatabase();
+        var cfg = new ColumnFamilyConfig
+        {
+            TombstoneDensityTrigger = 0.5,
+            TombstoneDensityMinEntries = 256
+        };
+        db.CreateColumnFamily("ts_cf", cfg);
+
+        var cf = db.GetColumnFamily("ts_cf")!;
+        var stats = cf.GetStats();
+
+        Assert.NotNull(stats.Config);
+        Assert.Equal(0.5, stats.Config!.TombstoneDensityTrigger);
+        Assert.Equal((ulong)256, stats.Config.TombstoneDensityMinEntries);
+
+        var defaults = ColumnFamilyConfig.Default;
+        Assert.True(defaults.TombstoneDensityMinEntries > 0);
+    }
+
+    [Fact]
+    public void TombstoneStats_ShouldPopulateAfterDeletes()
+    {
+        using var db = OpenDatabase();
+        var cfg = new ColumnFamilyConfig { WriteBufferSize = 64 * 1024 };
+        db.CreateColumnFamily("ts_stats_cf", cfg);
+        var cf = db.GetColumnFamily("ts_stats_cf")!;
+
+        const int n = 200;
+        using (var txn = db.BeginTransaction())
+        {
+            for (int i = 0; i < n; i++)
+            {
+                txn.Put(cf, Encoding.UTF8.GetBytes($"key{i:D5}"), Encoding.UTF8.GetBytes($"value{i}"));
+            }
+            txn.Commit();
+        }
+        cf.FlushMemtable();
+
+        using (var txn = db.BeginTransaction())
+        {
+            for (int i = 0; i < n / 2; i++)
+            {
+                txn.Delete(cf, Encoding.UTF8.GetBytes($"key{i:D5}"));
+            }
+            txn.Commit();
+        }
+        cf.FlushMemtable();
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (cf.IsFlushing() && DateTime.UtcNow < deadline)
+        {
+            Thread.Sleep(50);
+        }
+
+        var stats = cf.GetStats();
+        Assert.True(stats.TotalTombstones > 0, "expected total_tombstones > 0 after deletes + flush");
+        Assert.InRange(stats.TombstoneRatio, 0.0, 1.0);
+        Assert.InRange(stats.MaxSstDensity, 0.0, 1.0);
+        Assert.NotNull(stats.LevelTombstoneCounts);
+        Assert.Equal(stats.NumLevels, stats.LevelTombstoneCounts.Length);
+    }
+
+    [Fact]
+    public void CompactRange_ShouldSucceedAndRejectBothEmpty()
+    {
+        using var db = OpenDatabase();
+        var cfg = new ColumnFamilyConfig { WriteBufferSize = 64 * 1024 };
+        db.CreateColumnFamily("range_cf", cfg);
+        var cf = db.GetColumnFamily("range_cf")!;
+
+        for (int batch = 0; batch < 4; batch++)
+        {
+            using var txn = db.BeginTransaction();
+            for (int i = 0; i < 100; i++)
+            {
+                int idx = batch * 100 + i;
+                txn.Put(cf, Encoding.UTF8.GetBytes($"key{idx:D5}"), Encoding.UTF8.GetBytes($"value{idx}"));
+            }
+            txn.Commit();
+            cf.FlushMemtable();
+        }
+
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(10);
+        while (cf.IsFlushing() && DateTime.UtcNow < deadline)
+        {
+            Thread.Sleep(50);
+        }
+
+        var start = Encoding.UTF8.GetBytes("key00100");
+        var end = Encoding.UTF8.GetBytes("key00200");
+        cf.CompactRange(start, end);
+
+        var ex = Assert.Throws<TidesDBException>(() => cf.CompactRange(default, default));
+        Assert.Equal(ErrorCode.InvalidArgs, ex.ErrorCode);
+
+        using var readTxn = db.BeginTransaction();
+        var outsideKey = Encoding.UTF8.GetBytes("key00050");
+        var v = readTxn.Get(cf, outsideKey);
+        Assert.NotNull(v);
+        Assert.Equal("value50", Encoding.UTF8.GetString(v!));
+    }
+
+    [Fact]
+    public void MaxConcurrentFlushes_ShouldRespectConfig()
+    {
+        var defaults = Config.Default(_testDbPath);
+        Assert.True(defaults.MaxConcurrentFlushes > 0,
+            "Config.Default should source MaxConcurrentFlushes from tidesdb_default_config");
+
+        var config = new Config
+        {
+            DbPath = _testDbPath,
+            MaxConcurrentFlushes = 1
+        };
+        _db = TidesDb.Open(config);
+        _db.CreateColumnFamily("mcf_cf");
+        var cf = _db.GetColumnFamily("mcf_cf")!;
+
+        using (var txn = _db.BeginTransaction())
+        {
+            txn.Put(cf, Encoding.UTF8.GetBytes("k"), Encoding.UTF8.GetBytes("v"));
+            txn.Commit();
+        }
+        cf.FlushMemtable();
+    }
 }

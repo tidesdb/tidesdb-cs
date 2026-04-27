@@ -14,6 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using TidesDB.Native;
+
 namespace TidesDB;
 
 /// <summary>
@@ -102,8 +104,19 @@ public sealed class Config
     /// </summary>
     public ObjectStoreConfig? ObjectStoreConfig { get; init; }
 
+    private static readonly int s_defaultMaxConcurrentFlushes = NativeMethods.tidesdb_default_config().MaxConcurrentFlushes;
+
     /// <summary>
-    /// Creates a default configuration with the specified database path.
+    /// Global semaphore on the number of in-flight memtable flushes across all column
+    /// families. Bounds peak transient memory and work-queue depth. 0 falls back to the
+    /// library default (TDB_DEFAULT_MAX_CONCURRENT_FLUSHES).
+    /// </summary>
+    public int MaxConcurrentFlushes { get; init; } = s_defaultMaxConcurrentFlushes;
+
+    /// <summary>
+    /// Creates a default configuration with the specified database path. Field defaults
+    /// are sourced from the C library (tidesdb_default_config) so the binding tracks
+    /// library defaults rather than duplicating constants.
     /// </summary>
     public static Config Default(string dbPath) => new()
     {
@@ -217,6 +230,18 @@ public sealed class ColumnFamilyConfig
     public int L0QueueStallThreshold { get; init; } = 20;
 
     /// <summary>
+    /// Per-SSTable tombstone density (tombstone_count / num_entries) above which compaction
+    /// priority escalates. Range [0.0, 1.0]. 0.0 disables the check (default).
+    /// </summary>
+    public double TombstoneDensityTrigger { get; init; }
+
+    /// <summary>
+    /// Minimum entry count for an SSTable to be considered by the tombstone density trigger.
+    /// SSTables with fewer entries are ignored to prevent tiny-sstable noise (default: 1024).
+    /// </summary>
+    public ulong TombstoneDensityMinEntries { get; init; } = 1024;
+
+    /// <summary>
     /// Use B+tree format for klog (default: false = block-based).
     /// </summary>
     public bool UseBtree { get; init; } = false;
@@ -232,9 +257,43 @@ public sealed class ColumnFamilyConfig
     public bool ObjectPrefetchCompaction { get; init; } = true;
 
     /// <summary>
-    /// Creates a default column family configuration.
+    /// Creates a default column family configuration sourced from the C library defaults
+    /// (tidesdb_default_column_family_config), so the binding tracks library defaults
+    /// rather than duplicating constants.
     /// </summary>
-    public static ColumnFamilyConfig Default => new();
+    public static ColumnFamilyConfig Default => FromNativeDefaults();
+
+    private static unsafe ColumnFamilyConfig FromNativeDefaults()
+    {
+        var n = NativeMethods.tidesdb_default_column_family_config();
+        return new ColumnFamilyConfig
+        {
+            WriteBufferSize = (ulong)n.WriteBufferSize,
+            LevelSizeRatio = (ulong)n.LevelSizeRatio,
+            MinLevels = n.MinLevels,
+            DividingLevelOffset = n.DividingLevelOffset,
+            KlogValueThreshold = (ulong)n.KlogValueThreshold,
+            CompressionAlgorithm = (CompressionAlgorithm)n.CompressionAlgo,
+            EnableBloomFilter = n.EnableBloomFilter != 0,
+            BloomFpr = n.BloomFpr,
+            EnableBlockIndexes = n.EnableBlockIndexes != 0,
+            IndexSampleRatio = n.IndexSampleRatio,
+            BlockIndexPrefixLen = n.BlockIndexPrefixLen,
+            SyncMode = (SyncMode)n.SyncMode,
+            SyncIntervalUs = n.SyncIntervalUs,
+            SkipListMaxLevel = n.SkipListMaxLevel,
+            SkipListProbability = n.SkipListProbability,
+            DefaultIsolationLevel = (IsolationLevel)n.DefaultIsolationLevel,
+            MinDiskSpace = n.MinDiskSpace,
+            L1FileCountTrigger = n.L1FileCountTrigger,
+            L0QueueStallThreshold = n.L0QueueStallThreshold,
+            TombstoneDensityTrigger = n.TombstoneDensityTrigger,
+            TombstoneDensityMinEntries = n.TombstoneDensityMinEntries,
+            UseBtree = n.UseBtree != 0,
+            ObjectLazyCompaction = n.ObjectLazyCompaction != 0,
+            ObjectPrefetchCompaction = n.ObjectPrefetchCompaction != 0,
+        };
+    }
 }
 
 /// <summary>

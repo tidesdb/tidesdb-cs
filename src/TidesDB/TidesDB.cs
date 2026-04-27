@@ -116,7 +116,8 @@ public sealed class TidesDb : IDisposable
                 UnifiedMemtableSyncMode = (int)config.UnifiedMemtableSyncMode,
                 UnifiedMemtableSyncIntervalUs = config.UnifiedMemtableSyncIntervalUs,
                 ObjectStore = objStorePtr,
-                ObjectStoreConfig = objStoreConfigPtr
+                ObjectStoreConfig = objStoreConfigPtr,
+                MaxConcurrentFlushes = config.MaxConcurrentFlushes
             };
 
             var result = NativeMethods.tidesdb_open(ref nativeConfig, out var dbHandle);
@@ -426,6 +427,8 @@ public sealed class TidesDb : IDisposable
             MinDiskSpace = config.MinDiskSpace,
             L1FileCountTrigger = config.L1FileCountTrigger,
             L0QueueStallThreshold = config.L0QueueStallThreshold,
+            TombstoneDensityTrigger = config.TombstoneDensityTrigger,
+            TombstoneDensityMinEntries = config.TombstoneDensityMinEntries,
             UseBtree = config.UseBtree ? 1 : 0,
             CommitHookFn = nint.Zero,
             CommitHookCtx = nint.Zero,

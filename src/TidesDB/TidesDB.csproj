@@ -9,7 +9,7 @@
 
     <!-- Package metadata -->
     <PackageId>TidesDB</PackageId>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
     <Authors>TidesDB</Authors>
     <Company>TidesDB</Company>
     <Description>Official C# bindings for TidesDB, a high-performance embedded key-value storage engine. Wraps the native libtidesdb shared library, which must be installed on the target system.</Description>

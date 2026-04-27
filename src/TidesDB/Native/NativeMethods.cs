@@ -144,6 +144,9 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_compact")]
     internal static partial int tidesdb_compact(nint cf);
 
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_compact_range")]
+    internal static unsafe partial int tidesdb_compact_range(nint cf, byte* startKey, nuint startKeySize, byte* endKey, nuint endKeySize);
+
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_flush_memtable")]
     internal static partial int tidesdb_flush_memtable(nint cf);
 
@@ -166,6 +169,9 @@ internal static partial class NativeMethods
     // Configuration operations
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_default_column_family_config")]
     internal static partial NativeColumnFamilyConfig tidesdb_default_column_family_config();
+
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_default_config")]
+    internal static partial NativeConfig tidesdb_default_config();
 
     // Comparator operations
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_register_comparator", StringMarshalling = StringMarshalling.Utf8)]

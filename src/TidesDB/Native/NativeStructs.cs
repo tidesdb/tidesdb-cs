@@ -38,6 +38,7 @@ internal struct NativeConfig
     public ulong UnifiedMemtableSyncIntervalUs;
     public nint ObjectStore;
     public nint ObjectStoreConfig;
+    public int MaxConcurrentFlushes;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -88,6 +89,8 @@ internal unsafe struct NativeColumnFamilyConfig
     public ulong MinDiskSpace;
     public int L1FileCountTrigger;
     public int L0QueueStallThreshold;
+    public double TombstoneDensityTrigger;
+    public ulong TombstoneDensityMinEntries;
     public int UseBtree;
     public nint CommitHookFn;
     public nint CommitHookCtx;
@@ -127,6 +130,11 @@ internal struct NativeStats
     public ulong BtreeTotalNodes;
     public uint BtreeMaxHeight;
     public double BtreeAvgHeight;
+    public ulong TotalTombstones;
+    public double TombstoneRatio;
+    public nint LevelTombstoneCounts;
+    public double MaxSstDensity;
+    public int MaxSstDensityLevel;
 }
 
 [StructLayout(LayoutKind.Sequential)]
