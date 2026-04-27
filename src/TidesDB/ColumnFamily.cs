@@ -145,6 +145,32 @@ public sealed class ColumnFamily
     }
 
     /// <summary>
+    /// Synchronously compacts every SSTable whose key range overlaps [startKey, endKey).
+    /// Blocks the calling thread until the merge commits or fails - does not enqueue onto
+    /// the compaction thread pool. Pass <c>null</c> for either endpoint to indicate it is
+    /// unbounded on that side; both null is rejected with <c>InvalidArgs</c> (use
+    /// <see cref="Compact"/> for full-CF compaction).
+    /// </summary>
+    /// <param name="startKey">Inclusive lower bound, or null for unbounded.</param>
+    /// <param name="endKey">Exclusive upper bound, or null for unbounded.</param>
+    public void CompactRange(ReadOnlySpan<byte> startKey, ReadOnlySpan<byte> endKey)
+    {
+        int result;
+        unsafe
+        {
+            fixed (byte* startPtr = startKey)
+            fixed (byte* endPtr = endKey)
+            {
+                result = NativeMethods.tidesdb_compact_range(
+                    Handle,
+                    startKey.IsEmpty ? null : startPtr, (nuint)startKey.Length,
+                    endKey.IsEmpty ? null : endPtr, (nuint)endKey.Length);
+            }
+        }
+        TidesDBException.ThrowIfError(result, "failed to compact range");
+    }
+
+    /// <summary>
     /// Manually triggers memtable flush for this column family.
     /// </summary>
     public void FlushMemtable()
@@ -242,7 +268,12 @@ public sealed class ColumnFamily
                 UseBtree = nativeStats.UseBtree != 0,
                 BtreeTotalNodes = nativeStats.BtreeTotalNodes,
                 BtreeMaxHeight = nativeStats.BtreeMaxHeight,
-                BtreeAvgHeight = nativeStats.BtreeAvgHeight
+                BtreeAvgHeight = nativeStats.BtreeAvgHeight,
+                TotalTombstones = nativeStats.TotalTombstones,
+                TombstoneRatio = nativeStats.TombstoneRatio,
+                MaxSstDensity = nativeStats.MaxSstDensity,
+                MaxSstDensityLevel = nativeStats.MaxSstDensityLevel,
+                Config = ReadColumnFamilyConfig(nativeStats.Config),
             };
 
             if (nativeStats.NumLevels > 0)
@@ -250,6 +281,7 @@ public sealed class ColumnFamily
                 var levelSizes = new ulong[nativeStats.NumLevels];
                 var levelNumSstables = new int[nativeStats.NumLevels];
                 var levelKeyCounts = new ulong[nativeStats.NumLevels];
+                var levelTombstoneCounts = new ulong[nativeStats.NumLevels];
 
                 if (nativeStats.LevelSizes != nint.Zero)
                 {
@@ -275,11 +307,20 @@ public sealed class ColumnFamily
                     }
                 }
 
+                if (nativeStats.LevelTombstoneCounts != nint.Zero)
+                {
+                    for (int i = 0; i < nativeStats.NumLevels; i++)
+                    {
+                        levelTombstoneCounts[i] = (ulong)Marshal.ReadInt64(nativeStats.LevelTombstoneCounts, i * sizeof(ulong));
+                    }
+                }
+
                 return stats with
                 {
                     LevelSizes = levelSizes,
                     LevelNumSstables = levelNumSstables,
-                    LevelKeyCounts = levelKeyCounts
+                    LevelKeyCounts = levelKeyCounts,
+                    LevelTombstoneCounts = levelTombstoneCounts,
                 };
             }
 
@@ -289,5 +330,49 @@ public sealed class ColumnFamily
         {
             NativeMethods.tidesdb_free_stats(statsPtr);
         }
+    }
+
+    private static unsafe ColumnFamilyConfig? ReadColumnFamilyConfig(nint configPtr)
+    {
+        if (configPtr == nint.Zero) return null;
+
+        var n = Marshal.PtrToStructure<NativeColumnFamilyConfig>(configPtr);
+
+        string comparatorName = "";
+        var nameBytes = new byte[64];
+        Marshal.Copy(configPtr + (int)Marshal.OffsetOf<NativeColumnFamilyConfig>(nameof(NativeColumnFamilyConfig.ComparatorName)),
+            nameBytes, 0, nameBytes.Length);
+        int nameLen = Array.IndexOf<byte>(nameBytes, 0);
+        if (nameLen < 0) nameLen = nameBytes.Length;
+        if (nameLen > 0) comparatorName = System.Text.Encoding.UTF8.GetString(nameBytes, 0, nameLen);
+
+        return new ColumnFamilyConfig
+        {
+            WriteBufferSize = (ulong)n.WriteBufferSize,
+            LevelSizeRatio = (ulong)n.LevelSizeRatio,
+            MinLevels = n.MinLevels,
+            DividingLevelOffset = n.DividingLevelOffset,
+            KlogValueThreshold = (ulong)n.KlogValueThreshold,
+            CompressionAlgorithm = (CompressionAlgorithm)n.CompressionAlgo,
+            EnableBloomFilter = n.EnableBloomFilter != 0,
+            BloomFpr = n.BloomFpr,
+            EnableBlockIndexes = n.EnableBlockIndexes != 0,
+            IndexSampleRatio = n.IndexSampleRatio,
+            BlockIndexPrefixLen = n.BlockIndexPrefixLen,
+            SyncMode = (SyncMode)n.SyncMode,
+            SyncIntervalUs = n.SyncIntervalUs,
+            ComparatorName = comparatorName,
+            SkipListMaxLevel = n.SkipListMaxLevel,
+            SkipListProbability = n.SkipListProbability,
+            DefaultIsolationLevel = (IsolationLevel)n.DefaultIsolationLevel,
+            MinDiskSpace = n.MinDiskSpace,
+            L1FileCountTrigger = n.L1FileCountTrigger,
+            L0QueueStallThreshold = n.L0QueueStallThreshold,
+            TombstoneDensityTrigger = n.TombstoneDensityTrigger,
+            TombstoneDensityMinEntries = n.TombstoneDensityMinEntries,
+            UseBtree = n.UseBtree != 0,
+            ObjectLazyCompaction = n.ObjectLazyCompaction != 0,
+            ObjectPrefetchCompaction = n.ObjectPrefetchCompaction != 0,
+        };
     }
 }

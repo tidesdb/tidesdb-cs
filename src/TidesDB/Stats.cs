@@ -100,6 +100,31 @@ public sealed record Stats
     /// Average tree height across all SSTables (only populated if UseBtree=true).
     /// </summary>
     public double BtreeAvgHeight { get; init; }
+
+    /// <summary>
+    /// Sum of tombstone counts across every SSTable in the column family.
+    /// </summary>
+    public ulong TotalTombstones { get; init; }
+
+    /// <summary>
+    /// Ratio of total tombstones to total keys (0.0 if no keys). Range [0.0, 1.0].
+    /// </summary>
+    public double TombstoneRatio { get; init; }
+
+    /// <summary>
+    /// Tombstone count per level (parallels <see cref="LevelKeyCounts"/>).
+    /// </summary>
+    public ulong[] LevelTombstoneCounts { get; init; } = [];
+
+    /// <summary>
+    /// Worst per-SSTable tombstone density observed in the column family. Range [0.0, 1.0].
+    /// </summary>
+    public double MaxSstDensity { get; init; }
+
+    /// <summary>
+    /// 1-based level index where <see cref="MaxSstDensity"/> was observed (0 if none).
+    /// </summary>
+    public int MaxSstDensityLevel { get; init; }
 }
 
 /// <summary>
