@@ -63,7 +63,15 @@ public sealed class TidesDb : IDisposable
                         NativeMethods.tidesdb_objstore_fs_create(
                             osCfg.FsRootDir ?? throw new ArgumentException("FsRootDir is required for filesystem connector")),
                     ObjectStoreConnectorType.S3 =>
-                        throw new NotSupportedException("S3 connector requires native tidesdb_objstore_s3_create which is not yet exposed in the C# binding. Use the C API directly or contribute S3 support."),
+                        NativeMethods.tidesdb_objstore_s3_create(
+                            osCfg.S3Endpoint ?? throw new ArgumentException("S3Endpoint is required for S3 connector"), 
+                            osCfg.S3Bucket ?? throw new ArgumentException("S3Bucket is required for S3 connector"), 
+                            osCfg.S3KeyPrefix, 
+                            osCfg.S3AccessKey ?? throw new ArgumentException("S3AccessKey is required for S3 connector"), 
+                            osCfg.S3SecretKey ?? throw new ArgumentException("S3SecretKey is required for S3 connector"), 
+                            osCfg.S3Region, 
+                            osCfg.S3UseSsl ? 1 : 0, 
+                            osCfg.S3UsePathStyle ? 1 : 0),
                     _ => throw new ArgumentException($"Unknown connector type: {osCfg.ConnectorType}")
                 };
 

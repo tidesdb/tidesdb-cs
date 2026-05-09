@@ -216,6 +216,10 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_objstore_fs_create", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial nint tidesdb_objstore_fs_create(string rootDir);
 
+    // Object store operations
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_objstore_s3_create", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial nint tidesdb_objstore_s3_create(string endpoint, string bucket, string? prefix, string accessKey, string secretKey, string? region, int useSsl, int usePathStyle);
+
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_objstore_default_config")]
     internal static partial NativeObjStoreConfig tidesdb_objstore_default_config();
 
