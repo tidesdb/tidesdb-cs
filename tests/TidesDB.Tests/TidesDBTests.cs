@@ -1320,6 +1320,59 @@ public class TidesDBTests : IDisposable
                 Directory.Delete(objStoreDir, true);
         }
     }
+    
+    [Fact]
+    public void OpenWithObjectStore_S3_ShouldSucceed()
+    {
+        var objStoreDir = Path.Combine(Path.GetTempPath(), $"tidesdb_objstore_{Guid.NewGuid()}");
+        Directory.CreateDirectory(objStoreDir);
+
+        try
+        {
+            var config = new Config
+            {
+                DbPath = _testDbPath,
+                NumFlushThreads = 1,
+                NumCompactionThreads = 1,
+                LogLevel = LogLevel.Info,
+                BlockCacheSize = 64 * 1024 * 1024,
+                MaxOpenSstables = 256,
+                ObjectStoreConfig = new ObjectStoreConfig
+                {
+                    ConnectorType = ObjectStoreConnectorType.S3,
+                    S3Endpoint = "http://localhost:9000",
+                    S3Bucket = "my-tidesdb",
+                    S3AccessKey = "IoCMWHmye5ZjHoSwTIok",
+                    S3SecretKey = "YECnEaIco4s68zH3jqZ6HKlyC8FCZq5k1Ue4MLiq",
+                    LocalCacheMaxBytes = 128 * 1024 * 1024,
+                    MaxConcurrentUploads = 4,
+                    MaxConcurrentDownloads = 8,
+                },
+            };
+
+            using var db = TidesDb.Open(config);
+            _db = db;
+            Assert.NotNull(db);
+
+            db.CreateColumnFamily("test_cf");
+            var cf = db.GetColumnFamily("test_cf");
+            Assert.NotNull(cf);
+
+            using var txn = db.BeginTransaction();
+            txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
+            txn.Commit();
+
+            using var readTxn = db.BeginTransaction();
+            var result = readTxn.Get(cf, Encoding.UTF8.GetBytes("key1"));
+            Assert.NotNull(result);
+            Assert.Equal("value1", Encoding.UTF8.GetString(result));
+        }
+        finally
+        {
+            if (Directory.Exists(objStoreDir))
+                Directory.Delete(objStoreDir, true);
+        }
+    }
 
     [Fact]
     public void OpenWithObjectStore_DbStats_ShouldShowObjectStoreEnabled()
@@ -1373,6 +1426,76 @@ public class TidesDBTests : IDisposable
 
         Assert.Throws<ArgumentException>(() => TidesDb.Open(config));
     }
+    
+     [Fact]
+    public void ObjectStoreConfig_RequiresS3Endpoint()
+    {
+        var config = new Config
+        {
+            DbPath = _testDbPath,
+            ObjectStoreConfig = new ObjectStoreConfig
+            {
+                ConnectorType = ObjectStoreConnectorType.S3,
+                // S3Endpoint = "http://localhost:9000",
+            },
+        };
+
+        Assert.Throws<ArgumentException>(() => TidesDb.Open(config));
+    }
+
+    [Fact]
+    public void ObjectStoreConfig_RequiresS3Bucket()
+    {
+        var config = new Config
+        {
+            DbPath = _testDbPath,
+            ObjectStoreConfig = new ObjectStoreConfig
+            {
+                ConnectorType = ObjectStoreConnectorType.S3,
+                S3Endpoint = "http://localhost:9000",
+                // S3Bucket = "my-tidesdb",
+            },
+        };
+
+        Assert.Throws<ArgumentException>(() => TidesDb.Open(config));
+    }
+
+    [Fact]
+    public void ObjectStoreConfig_RequiresS3AccessKey()
+    {
+        var config = new Config
+        {
+            DbPath = _testDbPath,
+            ObjectStoreConfig = new ObjectStoreConfig
+            {
+                ConnectorType = ObjectStoreConnectorType.S3,
+                S3Endpoint = "http://localhost:9000",
+                S3Bucket = "my-tidesdb",
+                // S3AccessKey = "s3_access_key", 
+            },
+        };
+
+        Assert.Throws<ArgumentException>(() => TidesDb.Open(config));
+    }
+
+    [Fact]
+    public void ObjectStoreConfig_RequiresS3SecretKey()
+    {
+        var config = new Config
+        {
+            DbPath = _testDbPath,
+            ObjectStoreConfig = new ObjectStoreConfig
+            {
+                ConnectorType = ObjectStoreConnectorType.S3,
+                S3Endpoint = "http://localhost:9000",
+                S3Bucket = "my-tidesdb",
+                S3AccessKey = "s3_access_key", 
+                // S3SecretKey = "s3_secret_key",
+            },
+        };
+
+        Assert.Throws<ArgumentException>(() => TidesDb.Open(config));
+    }
 
     [Fact]
     public void OpenWithObjectStore_ReplicaMode_ShouldRejectWrites()
@@ -1417,6 +1540,79 @@ public class TidesDBTests : IDisposable
                 {
                     ConnectorType = ObjectStoreConnectorType.Filesystem,
                     FsRootDir = objStoreDir,
+                    ReplicaMode = true,
+                    ReplicaSyncIntervalUs = 1_000_000,
+                },
+            };
+
+            try
+            {
+                using var replicaDb = TidesDb.Open(replicaConfig);
+                var dbStats = replicaDb.GetDbStats();
+                Assert.True(dbStats.ReplicaMode);
+            }
+            finally
+            {
+                if (Directory.Exists(replicaDbPath))
+                    Directory.Delete(replicaDbPath, true);
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(objStoreDir))
+                Directory.Delete(objStoreDir, true);
+        }
+    }
+    
+    [Fact]
+    public void OpenWithObjectStore_S3_ReplicaMode_ShouldRejectWrites()
+    {
+        var objStoreDir = Path.Combine(Path.GetTempPath(), $"tidesdb_objstore_{Guid.NewGuid()}");
+        Directory.CreateDirectory(objStoreDir);
+
+        try
+        {
+            // First open as primary and create a CF
+            var primaryConfig = new Config
+            {
+                DbPath = _testDbPath,
+                NumFlushThreads = 1,
+                NumCompactionThreads = 1,
+                LogLevel = LogLevel.Info,
+                ObjectStoreConfig = new ObjectStoreConfig
+                {
+                    ConnectorType = ObjectStoreConnectorType.S3,
+                    S3Endpoint = "http://localhost:9000",
+                    S3Bucket = "my-tidesdb",
+                    S3AccessKey = "IoCMWHmye5ZjHoSwTIok",
+                    S3SecretKey = "YECnEaIco4s68zH3jqZ6HKlyC8FCZq5k1Ue4MLiq",
+                },
+            };
+
+            using (var primaryDb = TidesDb.Open(primaryConfig))
+            {
+                primaryDb.CreateColumnFamily("test_cf");
+                var cf = primaryDb.GetColumnFamily("test_cf")!;
+                using var txn = primaryDb.BeginTransaction();
+                txn.Put(cf, Encoding.UTF8.GetBytes("key1"), Encoding.UTF8.GetBytes("value1"));
+                txn.Commit();
+            }
+
+            // Open as replica
+            var replicaDbPath = Path.Combine(Path.GetTempPath(), $"tidesdb_replica_{Guid.NewGuid()}");
+            var replicaConfig = new Config
+            {
+                DbPath = replicaDbPath,
+                NumFlushThreads = 1,
+                NumCompactionThreads = 1,
+                LogLevel = LogLevel.Info,
+                ObjectStoreConfig = new ObjectStoreConfig
+                {
+                    ConnectorType = ObjectStoreConnectorType.S3,
+                    S3Endpoint = "http://localhost:9000",
+                    S3Bucket = "my-tidesdb",
+                    S3AccessKey = "IoCMWHmye5ZjHoSwTIok",
+                    S3SecretKey = "YECnEaIco4s68zH3jqZ6HKlyC8FCZq5k1Ue4MLiq",
                     ReplicaMode = true,
                     ReplicaSyncIntervalUs = 1_000_000,
                 },

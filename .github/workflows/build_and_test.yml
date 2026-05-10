@@ -40,11 +40,11 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt update
-          sudo apt install -y libzstd-dev liblz4-dev libsnappy-dev build-essential cmake pkg-config
+          sudo apt install -y libzstd-dev liblz4-dev libsnappy-dev build-essential cmake pkg-config libcurl4-openssl-dev libssl-dev
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
-        run: brew install zstd lz4 snappy
+        run: brew install zstd lz4 snappy curl openssl
 
       - name: Setup MSYS2 (Windows)
         if: runner.os == 'Windows'
@@ -65,7 +65,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cd tidesdb
-          cmake -S . -B build -DTIDESDB_BUILD_TESTS=OFF -DTIDESDB_WITH_SANITIZER=OFF -DBUILD_SHARED_LIBS=ON
+          cmake -S . -B build -DTIDESDB_BUILD_TESTS=OFF -DTIDESDB_WITH_SANITIZER=OFF -DBUILD_SHARED_LIBS=ON -DTIDESDB_WITH_S3=ON
           cmake --build build --config Release
           sudo cmake --install build
           sudo ldconfig
@@ -79,6 +79,7 @@ jobs:
             -DTIDESDB_BUILD_TESTS=OFF \
             -DTIDESDB_WITH_SANITIZER=OFF \
             -DBUILD_SHARED_LIBS=ON \
+            -DTIDESDB_WITH_S3=ON \
             -DCMAKE_PREFIX_PATH="${HOMEBREW_PREFIX}"
           cmake --build build --config Release
           sudo cmake --install build
@@ -149,6 +150,7 @@ jobs:
             -DTIDESDB_WITH_SANITIZER=OFF \
             -DTIDESDB_BUILD_TESTS=OFF \
             -DBUILD_SHARED_LIBS=ON \
+            -DTIDESDB_WITH_S3=ON \
             -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON \
             -S . -B build
           cmake --build build --config Release
