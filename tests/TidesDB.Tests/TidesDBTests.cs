@@ -1436,7 +1436,7 @@ public class TidesDBTests : IDisposable
             ObjectStoreConfig = new ObjectStoreConfig
             {
                 ConnectorType = ObjectStoreConnectorType.S3,
-                // S3Endpoint = "http://localhost:9000",  
+                // S3Endpoint = "http://localhost:9000",
             },
         };
 
