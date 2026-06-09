@@ -125,6 +125,42 @@ public sealed record Stats
     /// 1-based level index where <see cref="MaxSstDensity"/> was observed (0 if none).
     /// </summary>
     public int MaxSstDensityLevel { get; init; }
+
+    /// <summary>
+    /// Framed bytes appended to this column family's WAL (0 in unified memtable mode).
+    /// Lifetime since open. Divide write totals by <see cref="UserBytesWritten"/> for write amplification.
+    /// </summary>
+    public ulong WalBytesWritten { get; init; }
+
+    /// <summary>
+    /// On-disk bytes this column family's flushes wrote to L0 SSTables (lifetime since open).
+    /// </summary>
+    public ulong FlushBytesWritten { get; init; }
+
+    /// <summary>
+    /// On-disk bytes this column family's compactions wrote (lifetime since open).
+    /// </summary>
+    public ulong CompactionBytesWritten { get; init; }
+
+    /// <summary>
+    /// On-disk bytes this column family's compactions read as input (lifetime since open).
+    /// </summary>
+    public ulong CompactionBytesRead { get; init; }
+
+    /// <summary>
+    /// Logical key+value bytes committed to this column family (write-amplification denominator).
+    /// </summary>
+    public ulong UserBytesWritten { get; init; }
+
+    /// <summary>
+    /// Number of flushed SSTables produced by this column family (lifetime since open).
+    /// </summary>
+    public ulong FlushCount { get; init; }
+
+    /// <summary>
+    /// Number of compaction output SSTables produced by this column family (lifetime since open).
+    /// </summary>
+    public ulong CompactionCount { get; init; }
 }
 
 /// <summary>
@@ -286,6 +322,48 @@ public sealed class DbStats
     /// Whether running in read-only replica mode.
     /// </summary>
     public bool ReplicaMode { get; init; }
+
+    /// <summary>
+    /// Framed bytes appended to the shared unified WAL (0 if unified memtable mode is off).
+    /// Lifetime since open.
+    /// </summary>
+    public ulong UwalBytesWritten { get; init; }
+
+    /// <summary>
+    /// Per-CF WAL bytes summed across all column families (lifetime since open).
+    /// </summary>
+    public ulong WalBytesWritten { get; init; }
+
+    /// <summary>
+    /// Flush output bytes summed across all column families (lifetime since open).
+    /// </summary>
+    public ulong FlushBytesWritten { get; init; }
+
+    /// <summary>
+    /// Compaction output bytes summed across all column families (lifetime since open).
+    /// </summary>
+    public ulong CompactionBytesWritten { get; init; }
+
+    /// <summary>
+    /// Compaction input bytes summed across all column families (lifetime since open).
+    /// </summary>
+    public ulong CompactionBytesRead { get; init; }
+
+    /// <summary>
+    /// Logical committed bytes summed across all column families (write-amplification denominator).
+    /// Db-wide write amplification = (Uwal + Wal + Flush + Compaction bytes written) / UserBytesWritten.
+    /// </summary>
+    public ulong UserBytesWritten { get; init; }
+
+    /// <summary>
+    /// Flushed SSTables summed across all column families (lifetime since open).
+    /// </summary>
+    public ulong FlushCount { get; init; }
+
+    /// <summary>
+    /// Compaction output SSTables summed across all column families (lifetime since open).
+    /// </summary>
+    public ulong CompactionCount { get; init; }
 }
 
 /// <summary>

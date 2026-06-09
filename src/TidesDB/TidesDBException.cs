@@ -54,6 +54,7 @@ public class TidesDBException : Exception
             ErrorCode.InvalidDb => "invalid database handle",
             ErrorCode.Locked => "database is locked",
             ErrorCode.Readonly => "database is read-only",
+            ErrorCode.Busy => "resource busy",
             _ => "unknown error"
         };
 

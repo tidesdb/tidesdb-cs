@@ -22,6 +22,21 @@ internal static partial class NativeMethods
 {
     private const string LibraryName = "libtidesdb";
 
+    // Initialization / finalization
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_init")]
+    internal static partial int tidesdb_init(nint mallocFn, nint callocFn, nint reallocFn, nint freeFn);
+
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_finalize")]
+    internal static partial void tidesdb_finalize();
+
+    // Raise the process open-file ceiling (call before tidesdb_open)
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_raise_open_file_limit")]
+    internal static partial long tidesdb_raise_open_file_limit(long desired);
+
+    // Query whether a compression backend is compiled into this build
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_compression_available")]
+    internal static partial int tidesdb_compression_available(int type);
+
     // Database operations
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_open")]
     internal static partial int tidesdb_open(ref NativeConfig config, out nint db);
@@ -177,6 +192,17 @@ internal static partial class NativeMethods
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_register_comparator", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int tidesdb_register_comparator(nint db, string name, nint fn, string? ctxStr, nint ctx);
 
+    // INI config persistence
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_cf_config_load_from_ini", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tidesdb_cf_config_load_from_ini(string iniFile, string sectionName, ref NativeColumnFamilyConfig config);
+
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_cf_config_save_to_ini", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int tidesdb_cf_config_save_to_ini(string iniFile, string sectionName, ref NativeColumnFamilyConfig config);
+
+    // Cancel background compaction db-wide (fast-shutdown helper)
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_cancel_background_work")]
+    internal static partial int tidesdb_cancel_background_work(nint db);
+
     // Commit hook operations
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_cf_set_commit_hook")]
     internal static partial int tidesdb_cf_set_commit_hook(nint cf, nint fn, nint ctx);
@@ -219,6 +245,10 @@ internal static partial class NativeMethods
     // Object store operations
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_objstore_s3_create", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial nint tidesdb_objstore_s3_create(string endpoint, string bucket, string? prefix, string accessKey, string secretKey, string? region, int useSsl, int usePathStyle);
+
+    // S3 connector from full config struct (TLS + multipart tuning)
+    [LibraryImport(LibraryName, EntryPoint = "tidesdb_objstore_s3_create_config")]
+    internal static partial nint tidesdb_objstore_s3_create_config(ref NativeObjStoreS3Config config);
 
     [LibraryImport(LibraryName, EntryPoint = "tidesdb_objstore_default_config")]
     internal static partial NativeObjStoreConfig tidesdb_objstore_default_config();

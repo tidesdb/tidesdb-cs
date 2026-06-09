@@ -39,6 +39,7 @@ internal struct NativeConfig
     public nint ObjectStore;
     public nint ObjectStoreConfig;
     public int MaxConcurrentFlushes;
+    public int FinishCompactionsOnClose;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -60,6 +61,23 @@ internal struct NativeObjStoreConfig
     public int ReplicaMode;
     public ulong ReplicaSyncIntervalUs;
     public int ReplicaReplayWal;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct NativeObjStoreS3Config
+{
+    public nint Endpoint;
+    public nint Bucket;
+    public nint Prefix;
+    public nint AccessKey;
+    public nint SecretKey;
+    public nint Region;
+    public int UseSsl;
+    public int UsePathStyle;
+    public nint TlsCaPath;
+    public int TlsInsecureSkipVerify;
+    public nuint MultipartThreshold;
+    public nuint MultipartPartSize;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -135,6 +153,14 @@ internal struct NativeStats
     public nint LevelTombstoneCounts;
     public double MaxSstDensity;
     public int MaxSstDensityLevel;
+    // write-amplification counters (lifetime since open, on-disk framed bytes)
+    public ulong WalBytesWritten;
+    public ulong FlushBytesWritten;
+    public ulong CompactionBytesWritten;
+    public ulong CompactionBytesRead;
+    public ulong UserBytesWritten;
+    public ulong FlushCount;
+    public ulong CompactionCount;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -183,4 +209,13 @@ internal struct NativeDbStats
     public ulong TotalUploads;
     public ulong TotalUploadFailures;
     public int ReplicaMode;
+    // write-amplification counters (lifetime since open, on-disk framed bytes)
+    public ulong UwalBytesWritten;
+    public ulong WalBytesWritten;
+    public ulong FlushBytesWritten;
+    public ulong CompactionBytesWritten;
+    public ulong CompactionBytesRead;
+    public ulong UserBytesWritten;
+    public ulong FlushCount;
+    public ulong CompactionCount;
 }

@@ -273,6 +273,13 @@ public sealed class ColumnFamily
                 TombstoneRatio = nativeStats.TombstoneRatio,
                 MaxSstDensity = nativeStats.MaxSstDensity,
                 MaxSstDensityLevel = nativeStats.MaxSstDensityLevel,
+                WalBytesWritten = nativeStats.WalBytesWritten,
+                FlushBytesWritten = nativeStats.FlushBytesWritten,
+                CompactionBytesWritten = nativeStats.CompactionBytesWritten,
+                CompactionBytesRead = nativeStats.CompactionBytesRead,
+                UserBytesWritten = nativeStats.UserBytesWritten,
+                FlushCount = nativeStats.FlushCount,
+                CompactionCount = nativeStats.CompactionCount,
                 Config = ReadColumnFamilyConfig(nativeStats.Config),
             };
 
@@ -332,47 +339,10 @@ public sealed class ColumnFamily
         }
     }
 
-    private static unsafe ColumnFamilyConfig? ReadColumnFamilyConfig(nint configPtr)
+    private static ColumnFamilyConfig? ReadColumnFamilyConfig(nint configPtr)
     {
         if (configPtr == nint.Zero) return null;
-
         var n = Marshal.PtrToStructure<NativeColumnFamilyConfig>(configPtr);
-
-        string comparatorName = "";
-        var nameBytes = new byte[64];
-        Marshal.Copy(configPtr + (int)Marshal.OffsetOf<NativeColumnFamilyConfig>(nameof(NativeColumnFamilyConfig.ComparatorName)),
-            nameBytes, 0, nameBytes.Length);
-        int nameLen = Array.IndexOf<byte>(nameBytes, 0);
-        if (nameLen < 0) nameLen = nameBytes.Length;
-        if (nameLen > 0) comparatorName = System.Text.Encoding.UTF8.GetString(nameBytes, 0, nameLen);
-
-        return new ColumnFamilyConfig
-        {
-            WriteBufferSize = (ulong)n.WriteBufferSize,
-            LevelSizeRatio = (ulong)n.LevelSizeRatio,
-            MinLevels = n.MinLevels,
-            DividingLevelOffset = n.DividingLevelOffset,
-            KlogValueThreshold = (ulong)n.KlogValueThreshold,
-            CompressionAlgorithm = (CompressionAlgorithm)n.CompressionAlgo,
-            EnableBloomFilter = n.EnableBloomFilter != 0,
-            BloomFpr = n.BloomFpr,
-            EnableBlockIndexes = n.EnableBlockIndexes != 0,
-            IndexSampleRatio = n.IndexSampleRatio,
-            BlockIndexPrefixLen = n.BlockIndexPrefixLen,
-            SyncMode = (SyncMode)n.SyncMode,
-            SyncIntervalUs = n.SyncIntervalUs,
-            ComparatorName = comparatorName,
-            SkipListMaxLevel = n.SkipListMaxLevel,
-            SkipListProbability = n.SkipListProbability,
-            DefaultIsolationLevel = (IsolationLevel)n.DefaultIsolationLevel,
-            MinDiskSpace = n.MinDiskSpace,
-            L1FileCountTrigger = n.L1FileCountTrigger,
-            L0QueueStallThreshold = n.L0QueueStallThreshold,
-            TombstoneDensityTrigger = n.TombstoneDensityTrigger,
-            TombstoneDensityMinEntries = n.TombstoneDensityMinEntries,
-            UseBtree = n.UseBtree != 0,
-            ObjectLazyCompaction = n.ObjectLazyCompaction != 0,
-            ObjectPrefetchCompaction = n.ObjectPrefetchCompaction != 0,
-        };
+        return ColumnFamilyConfig.FromNative(n);
     }
 }

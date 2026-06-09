@@ -81,5 +81,6 @@ public enum ErrorCode
     InvalidDb = -10,
     Unknown = -11,
     Locked = -12,
-    Readonly = -13
+    Readonly = -13,
+    Busy = -14
 }

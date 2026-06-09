@@ -31,6 +31,7 @@ public sealed class TidesDb : IDisposable
     private nint _objStorePtr;
     private nint _objStoreConfigPtr;
     private nint _localCachePathPtr;
+    private readonly List<GCHandle> _comparatorHandles = new();
 
     private TidesDb(nint handle, nint dbPathPtr, nint objStorePtr, nint objStoreConfigPtr, nint localCachePathPtr)
     {
@@ -62,16 +63,7 @@ public sealed class TidesDb : IDisposable
                     ObjectStoreConnectorType.Filesystem =>
                         NativeMethods.tidesdb_objstore_fs_create(
                             osCfg.FsRootDir ?? throw new ArgumentException("FsRootDir is required for filesystem connector")),
-                    ObjectStoreConnectorType.S3 =>
-                        NativeMethods.tidesdb_objstore_s3_create(
-                            osCfg.S3Endpoint ?? throw new ArgumentException("S3Endpoint is required for S3 connector"), 
-                            osCfg.S3Bucket ?? throw new ArgumentException("S3Bucket is required for S3 connector"), 
-                            osCfg.S3KeyPrefix, 
-                            osCfg.S3AccessKey ?? throw new ArgumentException("S3AccessKey is required for S3 connector"), 
-                            osCfg.S3SecretKey ?? throw new ArgumentException("S3SecretKey is required for S3 connector"), 
-                            osCfg.S3Region, 
-                            osCfg.S3UseSsl ? 1 : 0, 
-                            osCfg.S3UsePathStyle ? 1 : 0),
+                    ObjectStoreConnectorType.S3 => CreateS3Connector(osCfg),
                     _ => throw new ArgumentException($"Unknown connector type: {osCfg.ConnectorType}")
                 };
 
@@ -125,7 +117,8 @@ public sealed class TidesDb : IDisposable
                 UnifiedMemtableSyncIntervalUs = config.UnifiedMemtableSyncIntervalUs,
                 ObjectStore = objStorePtr,
                 ObjectStoreConfig = objStoreConfigPtr,
-                MaxConcurrentFlushes = config.MaxConcurrentFlushes
+                MaxConcurrentFlushes = config.MaxConcurrentFlushes,
+                FinishCompactionsOnClose = config.FinishCompactionsOnClose ? 1 : 0
             };
 
             var result = NativeMethods.tidesdb_open(ref nativeConfig, out var dbHandle);
@@ -292,15 +285,51 @@ public sealed class TidesDb : IDisposable
     }
 
     /// <summary>
-    /// Registers a custom comparator with the database.
+    /// Registers a custom comparator implemented as a managed callback under the given name.
+    /// Register comparators before creating any column family that references the name; a column
+    /// family's comparator cannot be changed after creation. The callback runs on the comparison
+    /// hot path (see <see cref="ComparatorFunction"/> for the threading and performance contract);
+    /// for native-speed ordering of standard key shapes prefer
+    /// <see cref="RegisterBuiltInComparator"/>. The delegate is kept alive for the lifetime of this
+    /// database instance.
     /// </summary>
-    /// <param name="name">The comparator name.</param>
-    /// <param name="ctxStr">Optional context string.</param>
-    public void RegisterComparator(string name, string? ctxStr = null)
+    /// <param name="name">The comparator name (must be unique, under 64 bytes).</param>
+    /// <param name="comparator">The comparison callback.</param>
+    /// <param name="ctxStr">Optional context string passed through to the native registry.</param>
+    public void RegisterComparator(string name, ComparatorFunction comparator, string? ctxStr = null)
     {
         ThrowIfDisposed();
-        var result = NativeMethods.tidesdb_register_comparator(_handle, name, nint.Zero, ctxStr, nint.Zero);
-        TidesDBException.ThrowIfError(result, "failed to register comparator");
+        ArgumentNullException.ThrowIfNull(comparator);
+
+        var gcHandle = GCHandle.Alloc(comparator);
+        var result = NativeMethods.tidesdb_register_comparator(
+            _handle, name, ComparatorBridge.BridgePtr, ctxStr, GCHandle.ToIntPtr(gcHandle));
+
+        if (result != 0)
+        {
+            gcHandle.Free();
+            TidesDBException.ThrowIfError(result, "failed to register comparator");
+        }
+
+        _comparatorHandles.Add(gcHandle);
+    }
+
+    /// <summary>
+    /// Registers one of the built-in native comparators under a custom name. Unlike a managed
+    /// <see cref="RegisterComparator(string, ComparatorFunction, string?)"/> callback, this incurs
+    /// no managed transition on the comparison hot path. Each built-in is already registered under
+    /// its conventional name (for example <see cref="BuiltInComparator.Memcmp"/> as "memcmp"); use
+    /// this only when you want an additional alias.
+    /// </summary>
+    /// <param name="name">The comparator name (must be unique, under 64 bytes).</param>
+    /// <param name="comparator">The built-in comparator to register.</param>
+    /// <param name="ctxStr">Optional context string passed through to the native registry.</param>
+    public void RegisterBuiltInComparator(string name, BuiltInComparator comparator, string? ctxStr = null)
+    {
+        ThrowIfDisposed();
+        var fnPtr = ComparatorBridge.GetBuiltInPointer(comparator);
+        var result = NativeMethods.tidesdb_register_comparator(_handle, name, fnPtr, ctxStr, nint.Zero);
+        TidesDBException.ThrowIfError(result, "failed to register built-in comparator");
     }
 
     /// <summary>
@@ -336,6 +365,19 @@ public sealed class TidesDb : IDisposable
         ThrowIfDisposed();
         var result = NativeMethods.tidesdb_purge(_handle);
         TidesDBException.ThrowIfError(result, "failed to purge database");
+    }
+
+    /// <summary>
+    /// Cancels background compaction db-wide: in-flight merges bail safely and queued compaction is
+    /// skipped. Flushes are unaffected, so durability is preserved. Blocks (bounded) until compaction
+    /// is idle. The effect is sticky for the session and reset on the next open - intended to be
+    /// called right before <see cref="Dispose"/> for a fast shutdown.
+    /// </summary>
+    public void CancelBackgroundWork()
+    {
+        ThrowIfDisposed();
+        var result = NativeMethods.tidesdb_cancel_background_work(_handle);
+        TidesDBException.ThrowIfError(result, "failed to cancel background work");
     }
 
     /// <summary>
@@ -382,7 +424,15 @@ public sealed class TidesDb : IDisposable
             UploadQueueDepth = (ulong)nativeStats.UploadQueueDepth,
             TotalUploads = nativeStats.TotalUploads,
             TotalUploadFailures = nativeStats.TotalUploadFailures,
-            ReplicaMode = nativeStats.ReplicaMode != 0
+            ReplicaMode = nativeStats.ReplicaMode != 0,
+            UwalBytesWritten = nativeStats.UwalBytesWritten,
+            WalBytesWritten = nativeStats.WalBytesWritten,
+            FlushBytesWritten = nativeStats.FlushBytesWritten,
+            CompactionBytesWritten = nativeStats.CompactionBytesWritten,
+            CompactionBytesRead = nativeStats.CompactionBytesRead,
+            UserBytesWritten = nativeStats.UserBytesWritten,
+            FlushCount = nativeStats.FlushCount,
+            CompactionCount = nativeStats.CompactionCount
         };
     }
 
@@ -407,6 +457,61 @@ public sealed class TidesDb : IDisposable
             HitRate = nativeStats.HitRate,
             NumPartitions = (ulong)nativeStats.NumPartitions
         };
+    }
+
+    private static nint CreateS3Connector(ObjectStoreConfig osCfg)
+    {
+        var endpoint = osCfg.S3Endpoint ?? throw new ArgumentException("S3Endpoint is required for S3 connector");
+        var bucket = osCfg.S3Bucket ?? throw new ArgumentException("S3Bucket is required for S3 connector");
+        var accessKey = osCfg.S3AccessKey ?? throw new ArgumentException("S3AccessKey is required for S3 connector");
+        var secretKey = osCfg.S3SecretKey ?? throw new ArgumentException("S3SecretKey is required for S3 connector");
+
+        if (!osCfg.RequiresS3ConfigFactory)
+        {
+            return NativeMethods.tidesdb_objstore_s3_create(
+                endpoint, bucket, osCfg.S3KeyPrefix, accessKey, secretKey,
+                osCfg.S3Region, osCfg.S3UseSsl ? 1 : 0, osCfg.S3UsePathStyle ? 1 : 0);
+        }
+
+        // Advanced TLS / multipart options require the full-config factory. Native copies the
+        // fields, so the marshalled strings need only outlive the call.
+        var endpointPtr = Marshal.StringToHGlobalAnsi(endpoint);
+        var bucketPtr = Marshal.StringToHGlobalAnsi(bucket);
+        var prefixPtr = osCfg.S3KeyPrefix != null ? Marshal.StringToHGlobalAnsi(osCfg.S3KeyPrefix) : nint.Zero;
+        var accessKeyPtr = Marshal.StringToHGlobalAnsi(accessKey);
+        var secretKeyPtr = Marshal.StringToHGlobalAnsi(secretKey);
+        var regionPtr = osCfg.S3Region != null ? Marshal.StringToHGlobalAnsi(osCfg.S3Region) : nint.Zero;
+        var caPathPtr = osCfg.S3TlsCaPath != null ? Marshal.StringToHGlobalAnsi(osCfg.S3TlsCaPath) : nint.Zero;
+
+        try
+        {
+            var nativeS3 = new NativeObjStoreS3Config
+            {
+                Endpoint = endpointPtr,
+                Bucket = bucketPtr,
+                Prefix = prefixPtr,
+                AccessKey = accessKeyPtr,
+                SecretKey = secretKeyPtr,
+                Region = regionPtr,
+                UseSsl = osCfg.S3UseSsl ? 1 : 0,
+                UsePathStyle = osCfg.S3UsePathStyle ? 1 : 0,
+                TlsCaPath = caPathPtr,
+                TlsInsecureSkipVerify = osCfg.S3TlsInsecureSkipVerify ? 1 : 0,
+                MultipartThreshold = (nuint)osCfg.S3MultipartThreshold,
+                MultipartPartSize = (nuint)osCfg.S3MultipartPartSize
+            };
+            return NativeMethods.tidesdb_objstore_s3_create_config(ref nativeS3);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(endpointPtr);
+            Marshal.FreeHGlobal(bucketPtr);
+            if (prefixPtr != nint.Zero) Marshal.FreeHGlobal(prefixPtr);
+            Marshal.FreeHGlobal(accessKeyPtr);
+            Marshal.FreeHGlobal(secretKeyPtr);
+            if (regionPtr != nint.Zero) Marshal.FreeHGlobal(regionPtr);
+            if (caPathPtr != nint.Zero) Marshal.FreeHGlobal(caPathPtr);
+        }
     }
 
     internal static unsafe NativeColumnFamilyConfig CreateNativeColumnFamilyConfigPublic(ColumnFamilyConfig config)
@@ -494,5 +599,11 @@ public sealed class TidesDb : IDisposable
             Marshal.FreeHGlobal(_objStoreConfigPtr);
             _objStoreConfigPtr = nint.Zero;
         }
+
+        foreach (var handle in _comparatorHandles)
+        {
+            if (handle.IsAllocated) handle.Free();
+        }
+        _comparatorHandles.Clear();
     }
 }
