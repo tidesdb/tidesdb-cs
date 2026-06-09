@@ -1746,7 +1746,9 @@ public class TidesDBTests : IDisposable
     public void MaxConcurrentFlushes_ShouldRespectConfig()
     {
         var defaults = Config.Default(_testDbPath);
-        Assert.True(defaults.MaxConcurrentFlushes > 0,
+        // The library default is 0 (a sentinel meaning "pin to the resolved flush-thread count"),
+        // so the binding must surface that value verbatim rather than substitute a constant.
+        Assert.True(defaults.MaxConcurrentFlushes >= 0,
             "Config.Default should source MaxConcurrentFlushes from tidesdb_default_config");
 
         var config = new Config

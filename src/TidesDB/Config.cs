@@ -114,6 +114,13 @@ public sealed class Config
     public int MaxConcurrentFlushes { get; init; } = s_defaultMaxConcurrentFlushes;
 
     /// <summary>
+    /// Close behavior. False (default) cancels in-flight compactions at their next checkpoint for
+    /// a fast shutdown - the merge discards its uncommitted output and leaves inputs intact, so no
+    /// data is lost. True lets in-flight compactions run to completion before close returns.
+    /// </summary>
+    public bool FinishCompactionsOnClose { get; init; } = false;
+
+    /// <summary>
     /// Creates a default configuration with the specified database path. Field defaults
     /// are sourced from the C library (tidesdb_default_config) so the binding tracks
     /// library defaults rather than duplicating constants.
@@ -263,9 +270,49 @@ public sealed class ColumnFamilyConfig
     /// </summary>
     public static ColumnFamilyConfig Default => FromNativeDefaults();
 
-    private static unsafe ColumnFamilyConfig FromNativeDefaults()
+    private static ColumnFamilyConfig FromNativeDefaults()
+        => FromNative(NativeMethods.tidesdb_default_column_family_config());
+
+    /// <summary>
+    /// Loads a column family configuration from an INI file section. Unspecified keys retain the
+    /// library defaults. Mirrors the native <c>tidesdb_cf_config_load_from_ini</c>.
+    /// </summary>
+    /// <param name="iniFile">Path to the INI file.</param>
+    /// <param name="sectionName">Section name within the INI file.</param>
+    /// <returns>The loaded configuration.</returns>
+    public static ColumnFamilyConfig LoadFromIni(string iniFile, string sectionName)
     {
         var n = NativeMethods.tidesdb_default_column_family_config();
+        var result = NativeMethods.tidesdb_cf_config_load_from_ini(iniFile, sectionName, ref n);
+        TidesDBException.ThrowIfError(result, "failed to load column family config from INI");
+        return FromNative(n);
+    }
+
+    /// <summary>
+    /// Saves this column family configuration to an INI file section, creating or updating the file.
+    /// Mirrors the native <c>tidesdb_cf_config_save_to_ini</c>.
+    /// </summary>
+    /// <param name="iniFile">Path to the INI file.</param>
+    /// <param name="sectionName">Section name within the INI file.</param>
+    public void SaveToIni(string iniFile, string sectionName)
+    {
+        var n = TidesDb.CreateNativeColumnFamilyConfigPublic(this);
+        var result = NativeMethods.tidesdb_cf_config_save_to_ini(iniFile, sectionName, ref n);
+        TidesDBException.ThrowIfError(result, "failed to save column family config to INI");
+    }
+
+    internal static unsafe ColumnFamilyConfig FromNative(NativeColumnFamilyConfig n)
+    {
+        string comparatorName = "";
+        int nameLen = 0;
+        while (nameLen < 64 && n.ComparatorName[nameLen] != 0) nameLen++;
+        if (nameLen > 0)
+        {
+            var nameBytes = new byte[nameLen];
+            for (int i = 0; i < nameLen; i++) nameBytes[i] = n.ComparatorName[i];
+            comparatorName = System.Text.Encoding.UTF8.GetString(nameBytes);
+        }
+
         return new ColumnFamilyConfig
         {
             WriteBufferSize = (ulong)n.WriteBufferSize,
@@ -281,6 +328,7 @@ public sealed class ColumnFamilyConfig
             BlockIndexPrefixLen = n.BlockIndexPrefixLen,
             SyncMode = (SyncMode)n.SyncMode,
             SyncIntervalUs = n.SyncIntervalUs,
+            ComparatorName = comparatorName,
             SkipListMaxLevel = n.SkipListMaxLevel,
             SkipListProbability = n.SkipListProbability,
             DefaultIsolationLevel = (IsolationLevel)n.DefaultIsolationLevel,
@@ -352,6 +400,38 @@ public sealed class ObjectStoreConfig
     /// Use path-style URLs for S3 (default: false for AWS, set true for MinIO).
     /// </summary>
     public bool S3UsePathStyle { get; init; } = false;
+
+    /// <summary>
+    /// Custom CA bundle file path for the S3 TLS connection (null = system bundle).
+    /// Setting this routes connector creation through the full S3 config (TLS-capable) factory.
+    /// </summary>
+    public string? S3TlsCaPath { get; init; }
+
+    /// <summary>
+    /// Disables S3 TLS peer and host verification (test only, insecure; default: false).
+    /// Setting this routes connector creation through the full S3 config (TLS-capable) factory.
+    /// </summary>
+    public bool S3TlsInsecureSkipVerify { get; init; } = false;
+
+    /// <summary>
+    /// S3 connector multipart upload threshold in bytes (0 = library default). When non-zero,
+    /// routes connector creation through the full S3 config factory.
+    /// </summary>
+    public ulong S3MultipartThreshold { get; init; } = 0;
+
+    /// <summary>
+    /// S3 connector multipart chunk size in bytes (0 = library default). When non-zero, routes
+    /// connector creation through the full S3 config factory.
+    /// </summary>
+    public ulong S3MultipartPartSize { get; init; } = 0;
+
+    /// <summary>
+    /// True when any S3 option requires the full S3 config factory
+    /// (<c>tidesdb_objstore_s3_create_config</c>) rather than the positional factory.
+    /// </summary>
+    internal bool RequiresS3ConfigFactory =>
+        S3TlsCaPath != null || S3TlsInsecureSkipVerify ||
+        S3MultipartThreshold != 0 || S3MultipartPartSize != 0;
 
     /// <summary>
     /// Local directory for cached SSTable files (null = use db_path).
