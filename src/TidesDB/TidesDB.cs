@@ -368,7 +368,7 @@ public sealed class TidesDb : IDisposable
     }
 
     /// <summary>
-    /// Cancels background compaction db-wide: in-flight merges bail safely and queued compaction is
+    /// Cancels background compaction db-wide, in-flight merges bail safely and queued compaction is
     /// skipped. Flushes are unaffected, so durability is preserved. Blocks (bounded) until compaction
     /// is idle. The effect is sticky for the session and reset on the next open - intended to be
     /// called right before <see cref="Dispose"/> for a fast shutdown.
@@ -425,6 +425,8 @@ public sealed class TidesDb : IDisposable
             TotalUploads = nativeStats.TotalUploads,
             TotalUploadFailures = nativeStats.TotalUploadFailures,
             ReplicaMode = nativeStats.ReplicaMode != 0,
+            PrimaryEpoch = nativeStats.PrimaryEpoch,
+            SeenEpoch = nativeStats.SeenEpoch,
             UwalBytesWritten = nativeStats.UwalBytesWritten,
             WalBytesWritten = nativeStats.WalBytesWritten,
             FlushBytesWritten = nativeStats.FlushBytesWritten,

@@ -209,6 +209,10 @@ internal struct NativeDbStats
     public ulong TotalUploads;
     public ulong TotalUploadFailures;
     public int ReplicaMode;
+    // single-writer fencing (object-store mode) -- lease epoch held by this primary, and the
+    // highest lease epoch observed by this node
+    public ulong PrimaryEpoch;
+    public ulong SeenEpoch;
     // write-amplification counters (lifetime since open, on-disk framed bytes)
     public ulong UwalBytesWritten;
     public ulong WalBytesWritten;

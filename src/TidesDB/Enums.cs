@@ -82,5 +82,6 @@ public enum ErrorCode
     Unknown = -11,
     Locked = -12,
     Readonly = -13,
-    Busy = -14
+    Busy = -14,
+    Precondition = -15
 }
