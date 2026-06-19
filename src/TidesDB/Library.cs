@@ -49,7 +49,7 @@ public static class Library
 
     /// <summary>
     /// Raises this process's open-file ceiling toward <paramref name="desired"/> descriptors so a
-    /// database can keep more SSTables open. Must be called BEFORE <see cref="TidesDb.Open"/> - the
+    /// database can keep more SSTables open. Must be called before <see cref="TidesDb.Open"/> - the
     /// engine sizes <c>MaxOpenSstables</c> to fit the ceiling at open time. This is an explicit,
     /// opt-in operator action; TidesDB never raises the limit on its own. A failed or partial raise
     /// is non-fatal.

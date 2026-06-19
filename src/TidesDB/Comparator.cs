@@ -65,7 +65,7 @@ public enum BuiltInComparator
 internal delegate int NativeComparatorFn(nint key1, nuint key1Size, nint key2, nuint key2Size, nint ctx);
 
 /// <summary>
-/// Internal plumbing for comparator registration: the managed-to-native bridge and built-in
+/// Internal plumbing for comparator registration, the managed-to-native bridge and built-in
 /// function-pointer resolution.
 /// </summary>
 internal static class ComparatorBridge

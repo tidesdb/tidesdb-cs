@@ -324,6 +324,18 @@ public sealed class DbStats
     public bool ReplicaMode { get; init; }
 
     /// <summary>
+    /// Single-writer fencing (object store mode): the lease epoch this primary currently holds
+    /// (0 when not a primary or holding no lease). Advances on a successful promotion.
+    /// </summary>
+    public ulong PrimaryEpoch { get; init; }
+
+    /// <summary>
+    /// Single-writer fencing (object store mode): the highest lease epoch this node has observed
+    /// in the store. A replica tracks the active primary's epoch here.
+    /// </summary>
+    public ulong SeenEpoch { get; init; }
+
+    /// <summary>
     /// Framed bytes appended to the shared unified WAL (0 if unified memtable mode is off).
     /// Lifetime since open.
     /// </summary>

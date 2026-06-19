@@ -55,6 +55,7 @@ public class TidesDBException : Exception
             ErrorCode.Locked => "database is locked",
             ErrorCode.Readonly => "database is read-only",
             ErrorCode.Busy => "resource busy",
+            ErrorCode.Precondition => "object-store conditional write precondition failed",
             _ => "unknown error"
         };
 

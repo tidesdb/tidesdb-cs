@@ -20,7 +20,7 @@ using Xunit;
 namespace TidesDB.Tests;
 
 /// <summary>
-/// Tests for FFI surface added to track db.h: write-amplification stats, ErrorCode.Busy,
+/// Tests for FFI surface added to track db.h -- write-amplification stats, ErrorCode.Busy,
 /// init/finalize, open-file limit, compression availability, background-work cancellation,
 /// INI config round-trip, finish-compactions-on-close, and comparator registration.
 /// </summary>
@@ -49,7 +49,7 @@ public class FfiCoverageTests : IDisposable
         return _db;
     }
 
-    // ---- Library-level helpers -------------------------------------------------
+    // Library-level helpers
 
     [Fact]
     public void Library_RaiseOpenFileLimit_ReportsCeiling()
@@ -89,7 +89,7 @@ public class FfiCoverageTests : IDisposable
         Assert.False(Library.Initialize());
     }
 
-    // ---- ErrorCode.Busy --------------------------------------------------------
+    // ErrorCode.Busy
 
     [Fact]
     public void ErrorCode_Busy_HasExpectedValue()
@@ -100,7 +100,18 @@ public class FfiCoverageTests : IDisposable
         Assert.Contains("busy", ex.Message);
     }
 
-    // ---- finish_compactions_on_close ABI field ---------------------------------
+    // ErrorCode.Precondition (TDB_ERR_PRECONDITION = -15)
+
+    [Fact]
+    public void ErrorCode_Precondition_HasExpectedValue()
+    {
+        Assert.Equal(-15, (int)ErrorCode.Precondition);
+        var ex = new TidesDBException(ErrorCode.Precondition, "ctx");
+        Assert.Equal(ErrorCode.Precondition, ex.ErrorCode);
+        Assert.Contains("precondition", ex.Message);
+    }
+
+    // finish_compactions_on_close ABI field
 
     [Fact]
     public void Config_FinishCompactionsOnClose_OpensAndCloses()
@@ -121,7 +132,7 @@ public class FfiCoverageTests : IDisposable
         db.Dispose();
     }
 
-    // ---- CancelBackgroundWork --------------------------------------------------
+    // CancelBackgroundWork
 
     [Fact]
     public void CancelBackgroundWork_ShouldSucceed()
@@ -137,7 +148,7 @@ public class FfiCoverageTests : IDisposable
         db.CancelBackgroundWork();
     }
 
-    // ---- Write-amplification stats (struct tail fields) ------------------------
+    // Write-amplification stats (struct tail fields)
 
     [Fact]
     public void GetStats_WriteAmpFields_ArePopulatedAfterFlush()
@@ -179,12 +190,58 @@ public class FfiCoverageTests : IDisposable
 
         var stats = db.GetDbStats();
         // Reading these tail fields proves the NativeDbStats layout matches the C struct
-        // (a short struct would have corrupted the stack on the native write).
+        // (a short struct would have corrupted memory on the native write - the
+        // primary_epoch/seen_epoch fencing fields sit between replica_mode and the WA counters).
         Assert.True(stats.UserBytesWritten > 0);
         Assert.True(stats.UwalBytesWritten == 0, "unified WAL volume is 0 when unified mode is off");
+        // Single-writer fencing epochs are local-mode quiet (no object store, no lease).
+        Assert.False(stats.ReplicaMode);
+        Assert.Equal(0UL, stats.PrimaryEpoch);
+        Assert.Equal(0UL, stats.SeenEpoch);
     }
 
-    // ---- INI config round-trip -------------------------------------------------
+    // Object store mode db stats (filesystem connector)
+
+    [Fact]
+    public void GetDbStats_ObjectStoreMode_ReportsConnectorAndFencingFields()
+    {
+        var osRoot = Path.Combine(Path.GetTempPath(), $"tidesdb_os_{Guid.NewGuid()}");
+        Directory.CreateDirectory(osRoot);
+        try
+        {
+            using var db = TidesDb.Open(new Config
+            {
+                DbPath = _testDbPath,
+                ObjectStoreConfig = new ObjectStoreConfig
+                {
+                    ConnectorType = ObjectStoreConnectorType.Filesystem,
+                    FsRootDir = osRoot
+                }
+            });
+            db.CreateColumnFamily("cf");
+            var cf = db.GetColumnFamily("cf")!;
+            using (var txn = db.BeginTransaction())
+            {
+                txn.Put(cf, "k"u8.ToArray(), "v"u8.ToArray());
+                txn.Commit();
+            }
+
+            var stats = db.GetDbStats();
+            // Object store mode reads the full tail of the struct -- connector name plus the
+            // fencing/upload fields all decode at the correct offsets.
+            Assert.True(stats.ObjectStoreEnabled);
+            Assert.False(string.IsNullOrEmpty(stats.ObjectStoreConnector));
+            // A fresh non-replica primary holds no acquired lease; the fencing fields decode at
+            // the right offsets and the connector name (struct tail) is intact.
+            Assert.False(stats.ReplicaMode);
+        }
+        finally
+        {
+            if (Directory.Exists(osRoot)) Directory.Delete(osRoot, true);
+        }
+    }
+
+    // INI config round-trip
 
     [Fact]
     public void CfConfig_SaveAndLoadIni_RoundTrips()
@@ -237,7 +294,7 @@ public class FfiCoverageTests : IDisposable
         }
     }
 
-    // ---- Comparator registration ----------------------------------------------
+    // Comparator registration
 
     [Fact]
     public void RegisterBuiltInComparator_UnderCustomName_ShouldRegister()

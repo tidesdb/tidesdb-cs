@@ -205,7 +205,7 @@ internal static class NativeLibraryResolver
                 }
             }
 
-            // Last resort: try loading by name only (let the OS search)
+            // Last resort, try loading by name only (let the OS search)
             DebugLog("Trying last resort - loading by name only...");
             foreach (var libName in libraryNames)
             {
